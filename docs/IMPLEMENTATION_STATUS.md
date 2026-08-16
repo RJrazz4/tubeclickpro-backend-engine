@@ -10,6 +10,8 @@
 - Independently deployable Free and Premium worker processes
 - Python Agent-Reach/yt-dlp metadata and caption worker
 - Official YouTube Data API video/channel fallback with automatic failover
+- Neural VoiceRouter with five-provider fallback chain
+- Premium `/api/voice/generate`, MP3 normalization, rate limiting, and idempotency
 - Free polling endpoint
 - Premium SSE endpoint
 - Premium 0–10 second hook context path

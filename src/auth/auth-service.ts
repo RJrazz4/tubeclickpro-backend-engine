@@ -36,6 +36,27 @@ export class SupabaseAuthService implements AuthService {
     if (error || !data.user) throw new UnauthorizedError('Invalid or expired Supabase session');
 
     const config = getConfig();
+    if (config.SUPABASE_TIER_SOURCE === 'rpc') {
+      const { data: entitlement, error: entitlementError } = await this.adminClient.rpc(
+        config.SUPABASE_TIER_RPC,
+        { p_user_id: data.user.id },
+      );
+      if (entitlementError) {
+        throw new ForbiddenError('Unable to verify subscription entitlement', 'ENTITLEMENT_LOOKUP_FAILED');
+      }
+      const tier =
+        entitlement && typeof entitlement === 'object' && 'tier' in entitlement
+          ? String(entitlement.tier)
+          : 'free';
+      return {
+        id: data.user.id,
+        tier: ['pro', 'premium', 'premium_monthly', 'enterprise'].includes(tier)
+          ? 'premium'
+          : 'free',
+        entitlementExpiresAt: null,
+      };
+    }
+
     const { data: subscription, error: subscriptionError } = await this.adminClient
       .from(config.SUPABASE_SUBSCRIPTIONS_TABLE)
       .select('plan,status,current_period_end')
@@ -43,12 +64,11 @@ export class SupabaseAuthService implements AuthService {
       .eq('status', 'active')
       .gt('current_period_end', new Date().toISOString())
       .maybeSingle();
-
     if (subscriptionError) {
       throw new ForbiddenError('Unable to verify subscription entitlement', 'ENTITLEMENT_LOOKUP_FAILED');
     }
-
-    const premium = subscription?.plan === 'premium' || subscription?.plan === 'premium_monthly';
+    const premiumPlans = new Set(['premium', 'premium_monthly', 'pro', 'enterprise']);
+    const premium = typeof subscription?.plan === 'string' && premiumPlans.has(subscription.plan);
     return {
       id: data.user.id,
       tier: premium ? 'premium' : 'free',

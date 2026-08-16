@@ -7,14 +7,18 @@ import { ForbiddenError } from '../domain/errors.js';
 import { JobService } from '../services/job-service.js';
 import { JobStore } from '../services/job-store.js';
 import { createRedisConnection } from '../infrastructure/redis.js';
+import { voiceGenerationRequestSchema } from '../voice/contracts.js';
+import type { VoiceGenerationService } from '../voice/voice-generation-service.js';
 
 const jobQuerySchema = z.object({ jobId: z.string().uuid() });
+const idempotencyKeySchema = z.string().uuid();
 
 export interface RouteDependencies {
   auth: AuthService;
   jobs: JobService;
   store: JobStore;
   redis: Redis;
+  voice: VoiceGenerationService;
 }
 
 export async function registerRoutes(app: FastifyInstance, dependencies: RouteDependencies): Promise<void> {
@@ -24,6 +28,25 @@ export async function registerRoutes(app: FastifyInstance, dependencies: RouteDe
     const pong = await dependencies.redis.ping();
     if (pong !== 'PONG') return reply.code(503).send({ status: 'not-ready' });
     return { status: 'ready', redis: 'ok' };
+  });
+
+  app.post('/api/voice/generate', async (request, reply) => {
+    const user = await dependencies.auth.authenticate(request.headers);
+    const input = voiceGenerationRequestSchema.parse(request.body);
+    const rawIdempotencyKey = request.headers['idempotency-key'];
+    const idempotencyKey = idempotencyKeySchema.parse(
+      Array.isArray(rawIdempotencyKey) ? rawIdempotencyKey[0] : rawIdempotencyKey,
+    );
+    const generated = await dependencies.voice.generate(user, input, idempotencyKey);
+
+    return reply
+      .code(200)
+      .header('Content-Type', generated.contentType)
+      .header('Content-Length', String(generated.audio.length))
+      .header('Cache-Control', 'private, no-store')
+      .header('X-Voice-Provider', generated.provider)
+      .header('X-Voice-Fallback-Depth', String(generated.fallbackDepth))
+      .send(generated.audio);
   });
 
   app.post('/api/viral-dna/execute', async (request, reply) => {

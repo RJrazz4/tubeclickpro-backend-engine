@@ -31,3 +31,7 @@ The architecture is horizontally scalable, but production capacity is establishe
 ## ADR-008 — Agent-Reach primary, official API fallback
 
 Agent-Reach/yt-dlp remains the first provider for every extraction. A provider-neutral resilience adapter automatically invokes the official YouTube Data API after any primary execution failure. The official API supplies trustworthy video and channel metadata but never fabricates transcripts, because the Data API does not expose caption text.
+
+## ADR-009 — Server-owned neural VoiceRouter
+
+The browser sends only TubeClick voice aliases. Provider IDs and credentials stay server-side. The synchronous router cascades ElevenLabs → Fish Audio → GPT-SoVITS → Piper → ChatTTS, normalizes every success to MP3, and returns controlled 503 exhaustion rather than leaking provider failures. Static previews remain frontend assets and never enter this route.

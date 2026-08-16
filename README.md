@@ -15,6 +15,9 @@ Dedicated heavy-processing microservice for **Clone & Crush AI / Viral DNA Extra
 - Python Agent-Reach/yt-dlp extraction worker as the cost-free primary engine
 - Official YouTube Data API backup engine for primary failures, rate limits, and challenges
 - Premium 0–10 second hook context
+- `/api/voice/generate` with server-authoritative Premium gating
+- VoiceRouter cascade: ElevenLabs → Fish Audio → GPT-SoVITS → Piper → ChatTTS
+- MP3 normalization, idempotency, and per-user voice rate limiting
 - Internal MCP client/server bridge for Redis chunks and Supabase channel profiles
 - MCP-backed Micro-Critic baseline
 - Supabase migration, RLS, Docker topology, and tests
@@ -132,7 +135,12 @@ Use deployment secrets, never committed `.env` files:
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `AUTH_MODE=supabase`
-- tier concurrency and quota variables from `.env.example`
+- `SUPABASE_TIER_SOURCE=rpc` and `SUPABASE_TIER_RPC=get_ghost_tier_for` for the current frontend
+- `ELEVENLABS_API_KEY` and/or `FISH_AUDIO_API_KEY`
+- private GPT-SoVITS, Piper, and ChatTTS configuration as available
+- provider voice maps and tier concurrency/quota variables from `.env.example`
+
+ElevenLabs ships with the existing TubeClick alias map, so its API key is enough to activate the first provider. Fish Audio and self-hosted providers require alias maps because their voice/model IDs belong to your deployments.
 
 Deploy API, Free worker, and Premium worker as independent services. Set:
 

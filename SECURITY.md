@@ -10,7 +10,7 @@
 
 ## Secret handling
 
-Never commit `.env`, Supabase keys, Redis credentials, YouTube API keys, cookies, proxy credentials, model keys, or browser sessions. The Docker build excludes `.env` files. Configure `YOUTUBE_API_KEY` only through the deployment secret store; fallback requests never log the keyed URL.
+Never commit `.env`, Supabase keys, Redis credentials, YouTube API keys, TTS provider keys, cookies, proxy credentials, model keys, or browser sessions. The Docker build excludes `.env` files. Configure `YOUTUBE_API_KEY`, `ELEVENLABS_API_KEY`, `FISH_AUDIO_API_KEY`, and private self-hosted TTS credentials only through the deployment secret store; keyed URLs and authorization headers are never logged.
 
 If a secret is committed, rotate it immediately; deleting the latest file does not remove it from Git history.
 

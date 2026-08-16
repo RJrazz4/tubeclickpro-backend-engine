@@ -1,5 +1,22 @@
 # Initial API Contract
 
+## `POST /api/voice/generate`
+
+Premium-only synchronous neural voice generation. Requires a Supabase bearer token and UUID `Idempotency-Key` header.
+
+```json
+{
+  "text": "Voiceover text",
+  "voiceAlias": "daniel",
+  "stability": 0.5,
+  "speed": 1,
+  "outputFormat": "mp3"
+}
+```
+
+A successful response is `audio/mpeg` with `X-Voice-Provider` and `X-Voice-Fallback-Depth`. The router attempts ElevenLabs, Fish Audio, GPT-SoVITS, Piper, then ChatTTS. Provider failures cascade silently. Exhaustion returns controlled HTTP 503 `VOICE_PROVIDERS_UNAVAILABLE`, never an unhandled 500.
+
+
 ## `POST /api/viral-dna/execute`
 
 Creates a server-tiered asynchronous job.

@@ -12,6 +12,7 @@ import { closeQueues, createViralDnaQueues } from './queue/queues.js';
 import { JobService } from './services/job-service.js';
 import { JobStore } from './services/job-store.js';
 import { TierRateLimiter } from './services/tier-rate-limiter.js';
+import { createVoiceGenerationService } from './voice/create-voice-service.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const config = getConfig();
@@ -32,6 +33,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: config.CORS_ORIGINS.split(',').map((origin) => origin.trim()),
     credentials: true,
+    exposedHeaders: ['X-Voice-Provider', 'X-Voice-Fallback-Depth'],
   });
 
   const redis = createRedisConnection();
@@ -44,7 +46,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     createRunRepository(),
   );
 
-  await registerRoutes(app, { auth: createAuthService(), jobs, store, redis });
+  await registerRoutes(app, {
+    auth: createAuthService(),
+    jobs,
+    store,
+    redis,
+    voice: createVoiceGenerationService(redis),
+  });
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {
