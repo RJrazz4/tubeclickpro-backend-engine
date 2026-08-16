@@ -1,0 +1,104 @@
+openapi: 3.1.0
+info:
+  title: TubeClick Pro Backend Engine
+  version: 0.1.0
+servers:
+  - url: https://backend.example.com
+paths:
+  /healthz:
+    get:
+      operationId: health
+      responses:
+        '200':
+          description: API process is alive
+  /readyz:
+    get:
+      operationId: readiness
+      responses:
+        '200':
+          description: API and Redis are ready
+        '503':
+          description: Dependency not ready
+  /api/viral-dna/execute:
+    post:
+      operationId: executeViralDna
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteRequest'
+      responses:
+        '202':
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedJob'
+        '401': { description: Authentication required }
+        '429': { description: Tier rate limit exceeded }
+  /api/viral-dna/status:
+    get:
+      operationId: viralDnaStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: jobId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Owner-scoped job state
+        '404': { description: Job not found or not owned by caller }
+  /api/viral-dna/stream:
+    get:
+      operationId: viralDnaStream
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: jobId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Premium Server-Sent Events stream
+          content:
+            text/event-stream: {}
+        '403': { description: Premium entitlement required }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Supabase JWT
+  schemas:
+    ExecuteRequest:
+      type: object
+      additionalProperties: false
+      required: [videoUrl]
+      properties:
+        videoUrl:
+          type: string
+          format: uri
+          maxLength: 512
+        channelProfileId:
+          type: string
+          format: uuid
+        outputLanguage:
+          type: string
+          default: English
+    AcceptedJob:
+      type: object
+      required: [jobId, status, tier, queueClass, delivery, statusUrl]
+      properties:
+        jobId: { type: string, format: uuid }
+        status: { const: queued }
+        tier: { enum: [free, premium] }
+        queueClass: { enum: [conveyor, vip] }
+        delivery: { enum: [polling, sse] }
+        statusUrl: { type: string }
+        streamUrl: { type: string }

@@ -1,0 +1,4 @@
+# Agent-Reach capability layer pinned to the reviewed commit from 2026-08-16.
+git+https://github.com/Panniantong/Agent-Reach.git@93ae1d18c37b707dec053c7c4f9d91cd8ef8943d
+# Agent-Reach currently routes YouTube extraction through yt-dlp.
+yt-dlp

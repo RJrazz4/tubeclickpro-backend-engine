@@ -1,0 +1,61 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    environment:
+      NODE_ENV: development
+      AUTH_MODE: development
+      PORT: 3000
+      HOST: 0.0.0.0
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "3000:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker-free:
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    environment:
+      NODE_ENV: development
+      AUTH_MODE: development
+      WORKER_TIER: free
+      REDIS_URL: redis://redis:6379
+      MCP_CONTEXT_ENABLED: "false"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker-premium:
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    environment:
+      NODE_ENV: development
+      AUTH_MODE: development
+      WORKER_TIER: premium
+      REDIS_URL: redis://redis:6379
+      MCP_CONTEXT_ENABLED: "true"
+      MCP_CONTEXT_COMMAND: node
+      MCP_CONTEXT_ARGS: dist/mcp/server.js
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis-data:
