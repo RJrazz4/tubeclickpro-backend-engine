@@ -27,3 +27,7 @@ Redis owns transient queue/progress/event state. Supabase owns subscription auth
 ## ADR-007 — Honest scalability claims
 
 The architecture is horizontally scalable, but production capacity is established by load tests and dependency quotas—not by a theoretical worker count.
+
+## ADR-008 — Agent-Reach primary, official API fallback
+
+Agent-Reach/yt-dlp remains the first provider for every extraction. A provider-neutral resilience adapter automatically invokes the official YouTube Data API after any primary execution failure. The official API supplies trustworthy video and channel metadata but never fabricates transcripts, because the Data API does not expose caption text.

@@ -9,6 +9,7 @@
 - Redis admission limits, active-job limits, result state, and Pub/Sub
 - Independently deployable Free and Premium worker processes
 - Python Agent-Reach/yt-dlp metadata and caption worker
+- Official YouTube Data API video/channel fallback with automatic failover
 - Free polling endpoint
 - Premium SSE endpoint
 - Premium 0–10 second hook context path

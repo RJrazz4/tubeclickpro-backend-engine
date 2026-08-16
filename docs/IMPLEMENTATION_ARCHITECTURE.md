@@ -76,6 +76,14 @@ The initial slice:
 - enforces subprocess timeouts;
 - detects upstream challenges and does not bypass them.
 
+## Primary/fallback resilience
+
+Every tier pipeline receives a `ResilientYouTubeExtractor`, not a provider-specific client. It always tries Agent-Reach first. Any primary execution failure—including timeout, rate rejection, CAPTCHA/challenge response, malformed output, or process failure—activates the official YouTube Data API client automatically.
+
+The fallback calls `videos.list` for video metadata and `channels.list` for channel metadata. Channel lookup is partial-failure tolerant: a successful video response remains usable if the second channel call fails. Because the official API does not expose captions, fallback results explicitly contain empty transcript/hook arrays and a warning rather than fabricated transcript content.
+
+The API key is read only from `YOUTUBE_API_KEY`; it is never logged or returned. Production workers refuse to start without the fallback key, preventing deployment with a silently disabled reliability layer.
+
 ## Persistence
 
 Redis is the hot store for job state, progress, MCP context, rate limits, and Pub/Sub. Supabase is the durable run ledger and owns subscription entitlements. `supabase/migrations/202608160001_viral_dna_foundation.sql` creates the initial tables and RLS.

@@ -12,7 +12,8 @@ Dedicated heavy-processing microservice for **Clone & Crush AI / Viral DNA Extra
 - Server-authoritative Supabase entitlement lookup
 - Free polling: `GET /api/viral-dna/status`
 - Premium SSE: `GET /api/viral-dna/stream`
-- Python Agent-Reach/yt-dlp extraction worker
+- Python Agent-Reach/yt-dlp extraction worker as the cost-free primary engine
+- Official YouTube Data API backup engine for primary failures, rate limits, and challenges
 - Premium 0–10 second hook context
 - Internal MCP client/server bridge for Redis chunks and Supabase channel profiles
 - MCP-backed Micro-Critic baseline

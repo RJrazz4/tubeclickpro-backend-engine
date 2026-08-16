@@ -1,11 +1,9 @@
 import type { PipelineResult } from '../domain/extraction.js';
 import type { ViralDnaJobPayload } from '../domain/job.js';
-import { AgentReachRunner } from '../scraper/agent-reach-runner.js';
-
-type ExtractionRunner = Pick<AgentReachRunner, 'extract'>;
+import type { YouTubeExtractor } from '../scraper/resilient-youtube-extractor.js';
 
 export class FreePipeline {
-  constructor(private readonly scraper: ExtractionRunner) {}
+  constructor(private readonly scraper: YouTubeExtractor) {}
 
   async run(
     payload: ViralDnaJobPayload,

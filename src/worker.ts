@@ -10,6 +10,8 @@ import { PremiumPipeline } from './pipeline/premium-pipeline.js';
 import { createRunRepository } from './persistence/supabase-run-repository.js';
 import { FREE_QUEUE_NAME, PREMIUM_QUEUE_NAME, QUEUE_BASE } from './queue/names.js';
 import { AgentReachRunner } from './scraper/agent-reach-runner.js';
+import { ResilientYouTubeExtractor } from './scraper/resilient-youtube-extractor.js';
+import { YouTubeDataApiClient } from './scraper/youtube-data-api.js';
 import { JobStore } from './services/job-store.js';
 import { TierRateLimiter } from './services/tier-rate-limiter.js';
 
@@ -18,7 +20,13 @@ const redis = createRedisConnection();
 const store = new JobStore(redis);
 const limiter = new TierRateLimiter(redis);
 const runs = createRunRepository();
-const scraper = new AgentReachRunner();
+if (config.NODE_ENV === 'production' && !config.YOUTUBE_API_KEY) {
+  throw new Error('YOUTUBE_API_KEY is required by the production fallback engine');
+}
+const scraper = new ResilientYouTubeExtractor(
+  new AgentReachRunner(),
+  new YouTubeDataApiClient(),
+);
 const mcp = new McpContextClient();
 const freePipeline = new FreePipeline(scraper);
 const premiumPipeline = new PremiumPipeline(scraper, store, new MicroCritic(mcp));

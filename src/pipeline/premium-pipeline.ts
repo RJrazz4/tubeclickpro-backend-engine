@@ -1,16 +1,15 @@
 import type { PipelineResult } from '../domain/extraction.js';
 import type { ViralDnaJobPayload } from '../domain/job.js';
-import { AgentReachRunner } from '../scraper/agent-reach-runner.js';
 import { JobStore } from '../services/job-store.js';
+import type { YouTubeExtractor } from '../scraper/resilient-youtube-extractor.js';
 import { MicroCritic } from './micro-critic.js';
 
-type ExtractionRunner = Pick<AgentReachRunner, 'extract'>;
 type ContextStore = Pick<JobStore, 'storeContext'>;
 type Critic = Pick<MicroCritic, 'audit'>;
 
 export class PremiumPipeline {
   constructor(
-    private readonly scraper: ExtractionRunner,
+    private readonly scraper: YouTubeExtractor,
     private readonly store: ContextStore,
     private readonly critic: Critic,
   ) {}

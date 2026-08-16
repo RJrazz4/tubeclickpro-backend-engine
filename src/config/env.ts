@@ -37,6 +37,8 @@ const schema = z
     PYTHON_BIN: z.string().default('python3'),
     AGENT_REACH_WORKER_PATH: z.string().default('workers/python/viral_dna_worker.py'),
     SCRAPER_TIMEOUT_MS: z.coerce.number().int().min(5000).max(600000).default(90000),
+    YOUTUBE_API_KEY: z.string().default(''),
+    YOUTUBE_API_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
     MCP_CONTEXT_ENABLED: booleanFromEnv,
     MCP_CONTEXT_COMMAND: z.string().default('node'),
     MCP_CONTEXT_ARGS: z.string().default('dist/mcp/server.js'),
