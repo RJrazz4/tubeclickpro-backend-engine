@@ -140,7 +140,9 @@ Use deployment secrets, never committed `.env` files:
 - private GPT-SoVITS, Piper, and ChatTTS configuration as available
 - provider voice maps and tier concurrency/quota variables from `.env.example`
 
-ElevenLabs ships with the existing TubeClick alias map, so its API key is enough to activate the first provider. Fish Audio and self-hosted providers require alias maps because their voice/model IDs belong to your deployments.
+`YOUTUBE_API_KEY` and `ELEVENLABS_API_KEY` accept comma-separated pools such as `key_one,key_two`. Values are trimmed and de-duplicated. YouTube rotates after quota/rate 403/429 responses; ElevenLabs exhausts its key pool on rate/quota or key-auth failures before VoiceRouter moves to Fish Audio and the open-source chain. Use only keys you are authorized to operate and comply with provider account and quota policies.
+
+ElevenLabs ships with the existing TubeClick alias map, so its key pool is enough to activate the first provider. Fish Audio and self-hosted providers require alias maps because their voice/model IDs belong to your deployments.
 
 Deploy API, Free worker, and Premium worker as independent services. Set:
 

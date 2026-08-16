@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { getConfig } from '../config/env.js';
 import { extractionResultSchema, type ExtractionResult } from '../domain/extraction.js';
+import { ApiKeyPool, parseCommaSeparatedKeys } from '../infrastructure/api-key-pool.js';
+import { logger } from '../observability/logger.js';
 import { ScraperProviderError } from './errors.js';
 import type { AgentReachRequest } from './agent-reach-runner.js';
 
@@ -99,54 +101,96 @@ function bestThumbnail(thumbnails: z.infer<typeof thumbnailsSchema>): string | n
 }
 
 export class YouTubeDataApiClient {
+  private readonly keyPool: ApiKeyPool;
+
   constructor(
-    private readonly apiKey = getConfig().YOUTUBE_API_KEY,
+    apiKeys: readonly string[] | string = getConfig().YOUTUBE_API_KEY,
     private readonly fetchImpl: FetchLike = globalThis.fetch,
-  ) {}
+  ) {
+    this.keyPool = new ApiKeyPool(
+      typeof apiKeys === 'string' ? parseCommaSeparatedKeys(apiKeys) : apiKeys,
+    );
+  }
 
   private async request(path: 'videos' | 'channels', params: Record<string, string>): Promise<unknown> {
-    if (!this.apiKey) {
+    if (this.keyPool.size === 0) {
       throw new ScraperProviderError(
         'youtube-data-api',
         'FALLBACK_NOT_CONFIGURED',
         'YOUTUBE_API_KEY is not configured',
       );
     }
+
     const config = getConfig();
-    const url = new URL(`https://www.googleapis.com/youtube/v3/${path}`);
-    for (const [key, value] of Object.entries({ ...params, key: this.apiKey })) {
-      url.searchParams.set(key, value);
-    }
+    const candidates = this.keyPool.candidates();
+    for (let attempt = 0; attempt < candidates.length; attempt += 1) {
+      const candidate = candidates[attempt]!;
+      const url = new URL(`https://www.googleapis.com/youtube/v3/${path}`);
+      for (const [key, value] of Object.entries({ ...params, key: candidate.key })) {
+        url.searchParams.set(key, value);
+      }
 
-    let response: Response;
-    try {
-      response = await this.fetchImpl(url, {
-        headers: { accept: 'application/json' },
-        signal: AbortSignal.timeout(config.YOUTUBE_API_TIMEOUT_MS),
-      });
-    } catch (error) {
+      let response: Response;
+      try {
+        response = await this.fetchImpl(url, {
+          headers: { accept: 'application/json' },
+          signal: AbortSignal.timeout(config.YOUTUBE_API_TIMEOUT_MS),
+        });
+      } catch (error) {
+        throw new ScraperProviderError(
+          'youtube-data-api',
+          'FALLBACK_NETWORK_ERROR',
+          'YouTube Data API request failed',
+          { cause: error },
+        );
+      }
+
+      if (response.ok) {
+        this.keyPool.prefer(candidate.index);
+        try {
+          return (await response.json()) as unknown;
+        } catch (error) {
+          throw new ScraperProviderError(
+            'youtube-data-api',
+            'FALLBACK_INVALID_RESPONSE',
+            'YouTube Data API returned invalid JSON',
+            { cause: error },
+          );
+        }
+      }
+
+      if (response.status === 403 || response.status === 429) {
+        this.keyPool.advancePast(candidate.index);
+        logger.warn(
+          {
+            provider: 'youtube-data-api',
+            status: response.status,
+            keySlot: candidate.slot,
+            keyCount: this.keyPool.size,
+            path,
+          },
+          'YouTube API key quota/rate failure; rotating key',
+        );
+        if (attempt + 1 < candidates.length) continue;
+        throw new ScraperProviderError(
+          'youtube-data-api',
+          'FALLBACK_KEYS_EXHAUSTED',
+          'All configured YouTube Data API keys are quota-limited or rejected',
+        );
+      }
+
       throw new ScraperProviderError(
         'youtube-data-api',
-        'FALLBACK_NETWORK_ERROR',
-        'YouTube Data API request failed',
-        { cause: error },
+        `FALLBACK_HTTP_${response.status}`,
+        'YouTube Data API rejected the request',
       );
     }
 
-    if (!response.ok) {
-      const code = response.status === 429 ? 'FALLBACK_RATE_LIMITED' : `FALLBACK_HTTP_${response.status}`;
-      throw new ScraperProviderError('youtube-data-api', code, 'YouTube Data API rejected the request');
-    }
-    try {
-      return (await response.json()) as unknown;
-    } catch (error) {
-      throw new ScraperProviderError(
-        'youtube-data-api',
-        'FALLBACK_INVALID_RESPONSE',
-        'YouTube Data API returned invalid JSON',
-        { cause: error },
-      );
-    }
+    throw new ScraperProviderError(
+      'youtube-data-api',
+      'FALLBACK_KEYS_EXHAUSTED',
+      'All configured YouTube Data API keys are unavailable',
+    );
   }
 
   async extract(request: AgentReachRequest): Promise<ExtractionResult> {

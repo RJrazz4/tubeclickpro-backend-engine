@@ -82,7 +82,7 @@ Every tier pipeline receives a `ResilientYouTubeExtractor`, not a provider-speci
 
 The fallback calls `videos.list` for video metadata and `channels.list` for channel metadata. Channel lookup is partial-failure tolerant: a successful video response remains usable if the second channel call fails. Because the official API does not expose captions, fallback results explicitly contain empty transcript/hook arrays and a warning rather than fabricated transcript content.
 
-The API key is read only from `YOUTUBE_API_KEY`; it is never logged or returned. Production workers refuse to start without the fallback key, preventing deployment with a silently disabled reliability layer.
+Authorized keys are read as a trimmed comma-separated pool from `YOUTUBE_API_KEY`; they are never logged or returned. On quota/rate 403 or 429, the client advances to the next slot and retries the same request. The last successful slot remains preferred for subsequent calls. Production workers refuse to start with an empty pool, preventing deployment with a silently disabled reliability layer.
 
 ## Persistence
 

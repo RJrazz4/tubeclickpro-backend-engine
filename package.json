@@ -1,6 +1,6 @@
 {
   "name": "tubeclickpro-backend-engine",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Dedicated heavy-processing engine for TubeClick Pro Clone & Crush AI",
   "type": "module",

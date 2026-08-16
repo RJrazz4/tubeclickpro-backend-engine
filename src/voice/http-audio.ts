@@ -7,11 +7,12 @@ export async function fetchProviderAudio(options: {
   url: URL;
   headers: Record<string, string>;
   body: unknown;
+  fetchImpl?: typeof fetch;
 }): Promise<{ audio: Buffer; contentType: string }> {
   const config = getConfig();
   let response: Response;
   try {
-    response = await fetch(options.url, {
+      response = await (options.fetchImpl ?? globalThis.fetch)(options.url, {
       method: 'POST',
       headers: options.headers,
       body: JSON.stringify(options.body),

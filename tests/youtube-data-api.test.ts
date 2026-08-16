@@ -69,6 +69,52 @@ describe('YouTube Data API fallback', () => {
     expect(String(firstUrl)).toContain('/youtube/v3/videos');
   });
 
+  it('rotates to the next key after YouTube 403 quota exhaustion', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ error: { reason: 'quotaExceeded' } }, 403))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          items: [
+            {
+              id: 'abc123',
+              snippet: {
+                title: 'Rotated video',
+                description: '',
+                channelId: 'UC123',
+                channelTitle: 'Channel',
+                publishedAt: '2026-08-16T00:00:00Z',
+                thumbnails: {},
+              },
+              statistics: { viewCount: '1' },
+              contentDetails: { duration: 'PT1S' },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ items: [] }));
+
+    const client = new YouTubeDataApiClient(' key-one, key-two ', fetchMock);
+    const result = await client.extract({ videoUrl: 'https://youtu.be/abc123', mode: 'basic' });
+
+    expect(result.video.title).toBe('Rotated video');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('key=key-one');
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('key=key-two');
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('key=key-two');
+  });
+
+  it('reports controlled exhaustion after every YouTube key is quota-limited', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse({ error: { reason: 'quotaExceeded' } }, 403));
+    const client = new YouTubeDataApiClient(['key-one', 'key-two'], fetchMock);
+    await expect(
+      client.extract({ videoUrl: 'https://youtu.be/abc123', mode: 'basic' }),
+    ).rejects.toMatchObject({ code: 'FALLBACK_KEYS_EXHAUSTED' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('fails clearly when the backup key is not configured', async () => {
     const client = new YouTubeDataApiClient('', vi.fn<typeof fetch>());
     await expect(client.extract({ videoUrl: 'https://youtu.be/abc123', mode: 'basic' })).rejects.toMatchObject({

@@ -20,7 +20,7 @@ const redis = createRedisConnection();
 const store = new JobStore(redis);
 const limiter = new TierRateLimiter(redis);
 const runs = createRunRepository();
-if (config.NODE_ENV === 'production' && !config.YOUTUBE_API_KEY) {
+if (config.NODE_ENV === 'production' && config.YOUTUBE_API_KEY.length === 0) {
   throw new Error('YOUTUBE_API_KEY is required by the production fallback engine');
 }
 const scraper = new ResilientYouTubeExtractor(

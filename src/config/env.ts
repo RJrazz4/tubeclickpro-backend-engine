@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import { parseCommaSeparatedKeys } from '../infrastructure/api-key-pool.js';
 
 dotenv.config({ quiet: true });
 
@@ -7,6 +8,11 @@ const booleanFromEnv = z
   .enum(['true', 'false'])
   .default('false')
   .transform((value) => value === 'true');
+
+const apiKeyPoolFromEnv = z
+  .string()
+  .default('')
+  .transform(parseCommaSeparatedKeys);
 
 const schema = z
   .object({
@@ -39,7 +45,7 @@ const schema = z
     PYTHON_BIN: z.string().default('python3'),
     AGENT_REACH_WORKER_PATH: z.string().default('workers/python/viral_dna_worker.py'),
     SCRAPER_TIMEOUT_MS: z.coerce.number().int().min(5000).max(600000).default(90000),
-    YOUTUBE_API_KEY: z.string().default(''),
+    YOUTUBE_API_KEY: apiKeyPoolFromEnv,
     YOUTUBE_API_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
 
     // Neural voice router
@@ -50,7 +56,7 @@ const schema = z
     VOICE_MAX_AUDIO_BYTES: z.coerce.number().int().min(1048576).max(104857600).default(52428800),
     VOICE_IDEMPOTENCY_CACHE_MAX_BYTES: z.coerce.number().int().min(1048576).max(52428800).default(10485760),
     FFMPEG_BIN: z.string().default('ffmpeg'),
-    ELEVENLABS_API_KEY: z.string().default(''),
+    ELEVENLABS_API_KEY: apiKeyPoolFromEnv,
     ELEVENLABS_BASE_URL: z.string().url().default('https://api.elevenlabs.io'),
     ELEVENLABS_MODEL_ID: z.string().default('eleven_multilingual_v2'),
     ELEVENLABS_VOICE_MAP_JSON: z.string().default('{}'),

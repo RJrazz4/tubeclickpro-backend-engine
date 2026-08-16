@@ -35,3 +35,7 @@ Agent-Reach/yt-dlp remains the first provider for every extraction. A provider-n
 ## ADR-009 — Server-owned neural VoiceRouter
 
 The browser sends only TubeClick voice aliases. Provider IDs and credentials stay server-side. The synchronous router cascades ElevenLabs → Fish Audio → GPT-SoVITS → Piper → ChatTTS, normalizes every success to MP3, and returns controlled 503 exhaustion rather than leaking provider failures. Static previews remain frontend assets and never enter this route.
+
+## ADR-010 — Authorized API-key pools
+
+YouTube Data API and ElevenLabs keys are parsed from comma-separated environment values into de-duplicated pools. Key values are never logged. YouTube rotates on 403/429 quota or rate responses. ElevenLabs rotates within its provider on key-specific quota/rate/auth rejection and only then returns control to the multi-provider VoiceRouter. Pools are for resilience across authorized credentials, not circumvention of provider terms.
