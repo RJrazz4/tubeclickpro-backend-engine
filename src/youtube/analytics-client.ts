@@ -3,6 +3,7 @@ import { getConfig } from '../config/env.js';
 import { logger } from '../observability/logger.js';
 import type { QuotaLedger } from './quota-ledger.js';
 import type { QuotaPriority } from './quota-core.js';
+import { validateReportQuery, MetricValidationError } from './metric-sets.js';
 
 /**
  * Thin clients for the official YouTube APIs (OAuth path ONLY — the scraper
@@ -56,6 +57,14 @@ export class YouTubeAnalyticsClient {
     query: ReportQuery,
     opts: { userId: string; priority?: QuotaPriority },
   ): Promise<ReportResult> {
+    // Fail fast on unvalidated metric/dimension combos — before the quota
+    // ledger spends anything (T‑2A‑01 contract).
+    validateReportQuery({
+      ids: query.ids,
+      metrics: query.metrics,
+      ...(query.dimensions?.length ? { dimensions: [...query.dimensions] } : {}),
+      ...(query.filters ? { filters: query.filters } : {}),
+    });
     // Analytics API quota is call-count based; reserve 1 up front.
     const spend = await this.ledger.trySpend({
       api: 'analytics',

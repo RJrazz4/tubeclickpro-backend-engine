@@ -11,6 +11,7 @@ import {
   type DateWindow,
 } from './sync-core.js';
 import { rowsToObjects, YouTubeAnalyticsClient } from './analytics-client.js';
+import { CHANNEL_DAILY_METRICS, VIDEO_DAILY_METRICS } from './metric-sets.js';
 import { ConnectionRevokedError, type TokenProvider } from './token-provider.js';
 
 /**
@@ -138,8 +139,7 @@ export class SyncService {
         ids: 'channel==MINE',
         startDate: w.start,
         endDate: w.end,
-        metrics: 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,subscribersLost,likes,comments,shares'
-          .split(','),
+        metrics: [...CHANNEL_DAILY_METRICS],
         dimensions: ['day'],
         sort: 'day',
       }, { userId }),
@@ -169,7 +169,7 @@ export class SyncService {
         ids: 'channel==MINE',
         startDate: w.start,
         endDate: w.end,
-        metrics: 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,likes,comments,shares'.split(','),
+        metrics: [...VIDEO_DAILY_METRICS],
         dimensions: ['day', 'video'],
         sort: '-views',
         maxResults: 200,

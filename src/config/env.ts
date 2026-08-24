@@ -93,6 +93,17 @@ const schema = z
     YOUTUBE_USER_DAILY_UNITS: z.coerce.number().int().min(50).default(1500),
     YOUTUBE_SYNC_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(5),
 
+    // LLM gateway (T‑2B‑01) — OpenRouter key pool, battle-tested rotation.
+    OPENROUTER_API_KEYS: apiKeyPoolFromEnv,
+    // Premium default: Claude-class (ultra high-value text mandate).
+    OPENROUTER_MODEL_PREMIUM: z.string().default('anthropic/claude-sonnet-4.5'),
+    // Free tier: outlines on a strong free model (1/day habit loop).
+    OPENROUTER_MODEL_FREE: z.string().default('z-ai/glm-5.2:free'),
+    OPENROUTER_TIMEOUT_MS: z.coerce.number().int().min(5000).max(300000).default(60000),
+    SCRIPT_SYNTHESIS_MAX_COST_USD: z.coerce.number().min(0.005).max(1).default(0.12),
+    // Optional JSON override: {"model-id":{"input":3,"output":15}} per 1M tokens.
+    OPENROUTER_PRICE_TABLE_JSON: z.string().default('{}'),
+
     MCP_CONTEXT_ENABLED: booleanFromEnv,
     MCP_CONTEXT_COMMAND: z.string().default('node'),
     MCP_CONTEXT_ARGS: z.string().default('dist/mcp/server.js'),
