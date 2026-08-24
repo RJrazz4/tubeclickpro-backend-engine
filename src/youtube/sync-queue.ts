@@ -28,6 +28,7 @@ export const YOUTUBE_SYNC_QUEUE_NAME = 'youtube-sync';
 export type YoutubeSyncJob =
   | { kind: 'full-sync'; userId: string }
   | { kind: 'daily-refresh'; userId: string }
+  | { kind: 'compute-profile'; userId: string }
   | { kind: 'daily-sweep' }
   | { kind: 'maintenance' };
 
@@ -75,6 +76,19 @@ export function buildYoutubeSyncDeps(redis: Redis): YoutubeSyncDeps {
   };
 }
 
+/** Post-sync trigger: recompute the Hunger Profile (deduped per user+date). */
+export async function enqueueComputeProfile(redis: Redis, userId: string): Promise<void> {
+  const queue = createYoutubeSyncQueue(redis);
+  try {
+    await queue.add('job', { kind: 'compute-profile', userId } satisfies YoutubeSyncJob, {
+      jobId: `profile:${new Date().toISOString().slice(0, 13)}:${userId}`,
+      attempts: 2,
+    });
+  } finally {
+    await queue.close();
+  }
+}
+
 export async function enqueueFullSync(queue: Queue<YoutubeSyncJob>, userId: string): Promise<void> {
   await queue.add('job', { kind: 'full-sync', userId } satisfies YoutubeSyncJob, {
     // jobId dedupe: a second connect while one backfill is queued is a no-op.
@@ -108,13 +122,27 @@ async function runJob(
   job: Job<YoutubeSyncJob>,
   deps: YoutubeSyncDeps,
   sync: SyncService,
-): Promise<SyncOutcome | { ok: true }> {
+): Promise<SyncOutcome | { ok: true } | Record<string, unknown>> {
   const data = job.data;
   switch (data.kind) {
-    case 'full-sync':
-      return sync.run(data.userId, 'full');
-    case 'daily-refresh':
-      return sync.run(data.userId, 'daily');
+    case 'full-sync': {
+      const outcome = await sync.run(data.userId, 'full');
+      await enqueueComputeProfile(deps.redis, data.userId);
+      return outcome;
+    }
+    case 'daily-refresh': {
+      const outcome = await sync.run(data.userId, 'daily');
+      await enqueueComputeProfile(deps.redis, data.userId);
+      return outcome;
+    }
+    case 'compute-profile': {
+      const { data: result, error } = await deps.sb.rpc('compute_audience_profile', {
+        p_user_id: data.userId,
+      });
+      if (error) throw new Error(`compute_profile_failed: ${error.message}`);
+      logger.info({ userId: data.userId, result }, 'audience profile computed');
+      return result as Record<string, unknown>;
+    }
     case 'daily-sweep': {
       const { data: connections } = await deps.sb
         .from('youtube_connections')

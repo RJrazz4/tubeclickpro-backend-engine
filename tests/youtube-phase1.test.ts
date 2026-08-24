@@ -72,3 +72,15 @@ describe('backfill window math', () => {
     expect(chunk([], 400)).toEqual([]);
   });
 });
+
+describe('ISO-8601 video duration parsing', () => {
+  it('parses Data API durations to seconds', async () => {
+    const { parseIso8601Duration } = await import('../src/youtube/sync-core.js');
+    expect(parseIso8601Duration('PT45S')).toBe(45);        // Short
+    expect(parseIso8601Duration('PT1M2S')).toBe(62);
+    expect(parseIso8601Duration('PT1H3M4S')).toBe(3784);
+    expect(parseIso8601Duration('P1DT2H')).toBe(93600);
+    expect(parseIso8601Duration('')).toBe(0);
+    expect(parseIso8601Duration('garbage')).toBe(0);
+  });
+});

@@ -127,6 +127,17 @@ export const PHASE2_ADDITIONAL_METRICS = [
   'cardClickRate',
 ] as const;
 
+/** T‑2A‑02 production recipes (new columns from migration 202608250001). */
+export const CHANNEL_DAILY_V2_METRICS = [...CHANNEL_DAILY_METRICS, 'engagedViews'] as const;
+
+export const VIDEO_DAILY_V2_METRICS = [
+  ...VIDEO_DAILY_METRICS,
+  'engagedViews',
+  'audienceWatchRatio',
+  'cardTeaserImpressions',
+  'cardTeaserClickRate',
+] as const;
+
 // ---------------------------------------------------------------------------
 // Validation guard — called by YouTubeAnalyticsClient.fetchReport BEFORE the
 // quota ledger spends anything. Fail fast, fail loud, spend nothing.

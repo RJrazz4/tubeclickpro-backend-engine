@@ -76,3 +76,17 @@ export function chunk<T>(rows: T[], size: number): T[][] {
   for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
   return out;
 }
+
+/**
+ * Parse ISO-8601 durations (PT1M2S, PT1H3M4S, PT45S) to seconds.
+ * Data API contentDetails.duration format; Shorts <= 60s.
+ */
+export function parseIso8601Duration(iso: string): number {
+  const m = /^P(?:([0-9]+)D)?T?(?:([0-9]+)H)?(?:([0-9]+)M)?(?:([0-9]+)S)?$/.exec(iso ?? '');
+  if (!m) return 0;
+  const [, d, h, min, s] = m;
+  return (
+    (d ? Number(d) * 86400 : 0) + (h ? Number(h) * 3600 : 0) +
+    (min ? Number(min) * 60 : 0) + (s ? Number(s) : 0)
+  );
+}

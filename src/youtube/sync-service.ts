@@ -7,10 +7,15 @@ import {
   backfillWindows,
   chunk,
   dailyRefreshWindow,
+  parseIso8601Duration,
   remainingWindows,
   type DateWindow,
 } from './sync-core.js';
-import { rowsToObjects, YouTubeAnalyticsClient } from './analytics-client.js';
+import {
+  CHANNEL_DAILY_V2_METRICS,
+  VIDEO_DAILY_V2_METRICS,
+} from './metric-sets.js';
+import { DATA_API_COSTS, rowsToObjects, YouTubeAnalyticsClient } from './analytics-client.js';
 import { CHANNEL_DAILY_METRICS, VIDEO_DAILY_METRICS } from './metric-sets.js';
 import { ConnectionRevokedError, type TokenProvider } from './token-provider.js';
 
@@ -82,6 +87,8 @@ export class SyncService {
 
       let rowsUpserted = 0;
       let lastCompleted = completedThrough ?? '';
+      rowsUpserted += await this.syncCatalog(userId, mode);
+      rowsUpserted += await this.syncCityGeo(userId);
       for (const w of windows) {
         rowsUpserted += await this.syncWindow(userId, w);
         lastCompleted = w.end;
@@ -139,7 +146,7 @@ export class SyncService {
         ids: 'channel==MINE',
         startDate: w.start,
         endDate: w.end,
-        metrics: [...CHANNEL_DAILY_METRICS],
+        metrics: [...CHANNEL_DAILY_V2_METRICS],
         dimensions: ['day'],
         sort: 'day',
       }, { userId }),
@@ -158,7 +165,7 @@ export class SyncService {
         likes: Number(r.likes ?? 0),
         comments: Number(r.comments ?? 0),
         shares: Number(r.shares ?? 0),
-        impressions: 0, // filled by the impressions pass (Phase 2) — metric family validated at implementation
+        engaged_views: Number(r.engagedViews ?? 0),
       })),
       ['user_id', 'stat_date'],
     );
@@ -169,7 +176,7 @@ export class SyncService {
         ids: 'channel==MINE',
         startDate: w.start,
         endDate: w.end,
-        metrics: [...VIDEO_DAILY_METRICS],
+        metrics: [...VIDEO_DAILY_V2_METRICS],
         dimensions: ['day', 'video'],
         sort: '-views',
         maxResults: 200,
@@ -188,7 +195,10 @@ export class SyncService {
         likes: Number(r.likes ?? 0),
         comments: Number(r.comments ?? 0),
         shares: Number(r.shares ?? 0),
-        impressions: 0,
+        engaged_views: Number(r.engagedViews ?? 0),
+        audience_watch_ratio: Number(r.audienceWatchRatio ?? 0),
+        card_teaser_impressions: Number(r.cardTeaserImpressions ?? 0),
+        card_teaser_click_rate: Number(r.cardTeaserClickRate ?? 0),
       })),
       ['user_id', 'video_id', 'stat_date'],
     );
@@ -320,6 +330,109 @@ export class SyncService {
 
     logger.info({ userId, start: w.start, end: w.end, upserted }, 'sync window complete');
     return upserted;
+  }
+
+  /**
+   * Video catalog (topics + durations). Refreshed on every full-sync and
+   * when stale >7d on daily syncs. Cost: ~2 + pages, all quota-ledgered.
+   */
+  private async syncCatalog(userId: string, mode: SyncMode): Promise<number> {
+    const { data: meta } = await this.sb
+      .from('yt_videos')
+      .select('refreshed_at')
+      .eq('user_id', userId)
+      .order('refreshed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const lastRefresh = (meta as { refreshed_at?: string } | null)?.refreshed_at;
+    const stale = !lastRefresh || Date.now() - new Date(lastRefresh).getTime() > 7 * 86400 * 1000;
+    if (mode === 'daily' && !stale) return 0;
+
+    const accessToken = await this.tokens.getAccessToken(userId);
+    const ch = (await this.analytics.dataApi(
+      accessToken, 'channels',
+      { part: 'contentDetails', mine: 'true' },
+      DATA_API_COSTS.channels_list, { userId },
+    )) as { items?: Array<{ contentDetails?: { relatedPlaylists?: { uploads?: string } } }> };
+    const uploadsId = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    if (!uploadsId) return 0;
+
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+    for (let page = 0; page < 6; page += 1) {
+      const pi = (await this.analytics.dataApi(
+        accessToken, 'playlistItems',
+        { part: 'contentDetails', playlistId: uploadsId, maxResults: '50', ...(pageToken ? { pageToken } : {}) },
+        DATA_API_COSTS.playlistitems_list, { userId },
+      )) as { items?: Array<{ contentDetails?: { videoId?: string } }>; nextPageToken?: string };
+      for (const it of pi.items ?? []) if (it.contentDetails?.videoId) ids.push(it.contentDetails.videoId);
+      if (!pi.nextPageToken) break;
+      pageToken = pi.nextPageToken;
+    }
+
+    const nowIso = new Date().toISOString();
+    let count = 0;
+    for (const batch of chunk(ids, 50)) {
+      const vr = (await this.analytics.dataApi(
+        accessToken, 'videos',
+        { part: 'snippet,statistics,contentDetails', id: batch.join(','), maxResults: '50' },
+        DATA_API_COSTS.videos_list, { userId },
+      )) as {
+        items?: Array<{
+          id: string;
+          snippet?: { title?: string; tags?: string[]; publishedAt?: string; defaultAudioLanguage?: string; defaultLanguage?: string };
+          statistics?: { viewCount?: string };
+          contentDetails?: { duration?: string };
+        }>;
+      };
+      const rows = (vr.items ?? []).map((v) => ({
+        user_id: userId,
+        video_id: v.id,
+        title: v.snippet?.title ?? '',
+        tags: v.snippet?.tags ?? [],
+        duration_seconds: parseIso8601Duration(v.contentDetails?.duration ?? ''),
+        published_at: v.snippet?.publishedAt ?? null,
+        lang: v.snippet?.defaultAudioLanguage ?? v.snippet?.defaultLanguage ?? '',
+        views_lifetime: Number(v.statistics?.viewCount ?? 0),
+        refreshed_at: nowIso,
+      }));
+      if (rows.length > 0) await this.upsertRows('yt_videos', rows, ['user_id', 'video_id']);
+      count += rows.length;
+    }
+    logger.info({ userId, videos: count }, 'catalog synced');
+    return count;
+  }
+
+  /** City-level geo (channel): city dimension carries no country pairing. */
+  private async syncCityGeo(userId: string): Promise<number> {
+    const accessToken = await this.tokens.getAccessToken(userId);
+    const start = new Date(Date.now() - 28 * 86400 * 1000).toISOString().slice(0, 10);
+    const end = new Date(Date.now() - 86400 * 1000).toISOString().slice(0, 10);
+    const city = rowsToObjects(
+      await this.analytics.fetchReport(accessToken, {
+        ids: 'channel==MINE',
+        startDate: start,
+        endDate: end,
+        metrics: ['views', 'estimatedMinutesWatched'],
+        dimensions: ['day', 'city'],
+      }, { userId }),
+    );
+    return this.upsertRows(
+      'yt_audience_geo',
+      city
+        .filter((r) => String(r.city ?? '') !== '' && String(r.city ?? '') !== 'ZZ')
+        .map((r) => ({
+          user_id: userId,
+          video_id: '~channel',
+          stat_date: String(r.day),
+          country: '',
+          province: '',
+          city: String(r.city),
+          views: Number(r.views ?? 0),
+          estimated_minutes_watched: Number(r.estimatedMinutesWatched ?? 0),
+        })),
+      ['user_id', 'video_id', 'stat_date', 'country', 'province', 'city'],
+    );
   }
 
   private async upsertRows(
