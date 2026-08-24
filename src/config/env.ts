@@ -73,6 +73,26 @@ const schema = z
     CHATTTS_API_KEY: z.string().default(''),
     CHATTTS_VOICE_MAP_JSON: z.string().default('{}'),
 
+    // YouTube Signal Link (Module O). Empty = module disabled (routes 503).
+    GOOGLE_OAUTH_CLIENT_ID: z.string().default(''),
+    GOOGLE_OAUTH_CLIENT_SECRET: z.string().default(''),
+    // Exact-match redirect: https://<engine-host>/api/youtube/callback
+    GOOGLE_OAUTH_REDIRECT_URL: z.string().default(''),
+    // App-held master key for AES-256-GCM token encryption. Required when the
+    // module is enabled; any length >= 16 chars (key = SHA-256 of the secret).
+    YOUTUBE_TOKEN_MASTER_KEY: z.string().default(''),
+    YOUTUBE_CONNECT_SUCCESS_URL: z.string().default('https://tubeclickpro.in/settings?youtube=connected'),
+    YOUTUBE_CONNECT_ERROR_URL: z.string().default('https://tubeclickpro.in/settings?youtube=error'),
+    // Backfill depth on connect (days) and per-request chunk size.
+    YOUTUBE_BACKFILL_DAYS: z.coerce.number().int().min(7).max(365).default(90),
+    YOUTUBE_SYNC_CHUNK_DAYS: z.coerce.number().int().min(7).max(28).default(28),
+    // Platform-wide API budgets (the ledger sheds priority-3 first).
+    YOUTUBE_DATA_API_DAILY_UNITS: z.coerce.number().int().min(100).default(9000),
+    YOUTUBE_ANALYTICS_DAILY_CALLS: z.coerce.number().int().min(100).default(5000),
+    // Per-user daily fairness cap (units, data API weighting).
+    YOUTUBE_USER_DAILY_UNITS: z.coerce.number().int().min(50).default(1500),
+    YOUTUBE_SYNC_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(5),
+
     MCP_CONTEXT_ENABLED: booleanFromEnv,
     MCP_CONTEXT_COMMAND: z.string().default('node'),
     MCP_CONTEXT_ARGS: z.string().default('dist/mcp/server.js'),
@@ -84,6 +104,13 @@ const schema = z
         code: 'custom',
         path: ['AUTH_MODE'],
         message: 'Development authentication is forbidden in production',
+      });
+    }
+    if (value.GOOGLE_OAUTH_CLIENT_ID && value.YOUTUBE_TOKEN_MASTER_KEY.length < 16) {
+      context.addIssue({
+        code: 'custom',
+        path: ['YOUTUBE_TOKEN_MASTER_KEY'],
+        message: 'Master key must be at least 16 characters when the YouTube module is enabled',
       });
     }
     if (value.AUTH_MODE === 'supabase') {

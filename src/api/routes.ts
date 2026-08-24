@@ -9,6 +9,7 @@ import { JobStore } from '../services/job-store.js';
 import { createRedisConnection } from '../infrastructure/redis.js';
 import { voiceGenerationRequestSchema } from '../voice/contracts.js';
 import type { VoiceGenerationService } from '../voice/voice-generation-service.js';
+import { registerYoutubeRoutes } from './youtube-routes.js';
 
 const jobQuerySchema = z.object({ jobId: z.string().uuid() });
 const idempotencyKeySchema = z.string().uuid();
@@ -29,6 +30,8 @@ export async function registerRoutes(app: FastifyInstance, dependencies: RouteDe
     if (pong !== 'PONG') return reply.code(503).send({ status: 'not-ready' });
     return { status: 'ready', redis: 'ok' };
   });
+
+  await registerYoutubeRoutes(app, { auth: dependencies.auth, redis: dependencies.redis });
 
   app.post('/api/voice/generate', async (request, reply) => {
     const user = await dependencies.auth.authenticate(request.headers);

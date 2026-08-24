@@ -14,6 +14,13 @@ import { ResilientYouTubeExtractor } from './scraper/resilient-youtube-extractor
 import { YouTubeDataApiClient } from './scraper/youtube-data-api.js';
 import { JobStore } from './services/job-store.js';
 import { TierRateLimiter } from './services/tier-rate-limiter.js';
+import {
+  buildYoutubeSyncDeps,
+  createYoutubeSyncQueue,
+  createYoutubeSyncWorker,
+  ensureRepeatables,
+  youtubeSyncModuleEnabled,
+} from './youtube/sync-queue.js';
 
 const config = getConfig();
 const redis = createRedisConnection();
@@ -32,6 +39,18 @@ const freePipeline = new FreePipeline(scraper);
 const premiumPipeline = new PremiumPipeline(scraper, store, new MicroCritic(mcp));
 const prefix = `${config.REDIS_KEY_PREFIX}:${QUEUE_BASE}`;
 const workers: Array<Worker<ViralDnaJobPayload>> = [];
+
+// YouTube Signal Link worker (Module O/S) — started only when configured.
+if (youtubeSyncModuleEnabled()) {
+  const ytDeps = buildYoutubeSyncDeps(redis);
+  const ytQueue = createYoutubeSyncQueue(redis);
+  void ensureRepeatables(ytQueue)
+    .then(() => ytQueue.close())
+    .catch((err) => logger.warn({ error: String(err) }, 'youtube repeatables failed'));
+  const ytWorker = createYoutubeSyncWorker(ytDeps);
+  workers.push(ytWorker as unknown as Worker<ViralDnaJobPayload>);
+  logger.info({ concurrency: config.YOUTUBE_SYNC_CONCURRENCY }, 'youtube sync worker started');
+}
 
 async function persist(state: JobState): Promise<void> {
   await runs.upsert(state);
