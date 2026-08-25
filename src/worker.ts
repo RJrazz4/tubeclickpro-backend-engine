@@ -21,6 +21,7 @@ import {
   ensureRepeatables,
   youtubeSyncModuleEnabled,
 } from './youtube/sync-queue.js';
+import { createScriptWorker, scriptModuleEnabled } from './scripts/script-queue.js';
 
 const config = getConfig();
 const redis = createRedisConnection();
@@ -39,6 +40,13 @@ const freePipeline = new FreePipeline(scraper);
 const premiumPipeline = new PremiumPipeline(scraper, store, new MicroCritic(mcp));
 const prefix = `${config.REDIS_KEY_PREFIX}:${QUEUE_BASE}`;
 const workers: Array<Worker<ViralDnaJobPayload>> = [];
+
+// Crush synthesis worker (Module C) — started only when the LLM gateway has keys.
+if (scriptModuleEnabled()) {
+  const scriptWorker = createScriptWorker(redis);
+  workers.push(scriptWorker as unknown as Worker<ViralDnaJobPayload>);
+  logger.info({ queue: 'script-synthesis' }, 'script synthesis worker started');
+}
 
 // YouTube Signal Link worker (Module O/S) — started only when configured.
 if (youtubeSyncModuleEnabled()) {
