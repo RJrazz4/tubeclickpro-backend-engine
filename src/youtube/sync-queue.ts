@@ -170,6 +170,19 @@ async function runJob(
       const rows = await deps.ledger.drainForFlush(1000);
       const flushed = await QuotaLedger.flushToDb(deps.sb, rows as Array<Record<string, unknown>>);
       if (flushed > 0) logger.info({ flushed }, 'quota ledger flushed');
+      // 3. Module P closed loop: measure outcomes published >= 7 days ago.
+      try {
+        const { PublishService } = await import('../scripts/publish-service.js');
+        const { createVoiceGenerationService } = await import('../voice/create-voice-service.js');
+        const publisher = new PublishService(
+          deps.sb, deps.redis, createVoiceGenerationService(deps.redis),
+          deps.tokens, deps.analytics,
+        );
+        const measured = await publisher.measurePending(20);
+        if (measured > 0) logger.info({ measured }, 'script outcomes measured');
+      } catch (err) {
+        logger.warn({ error: String(err) }, 'outcome measurement skipped');
+      }
       return { ok: true };
     }
     default:

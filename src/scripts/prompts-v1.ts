@@ -179,3 +179,36 @@ export function criticMessages(input: StageInput, pkg: unknown): ChatMessage[] {
     },
   ];
 }
+
+// ---------------------------------------------------------------------------
+// T‑2C — AUDIENCE BRIEF (cached narrative; deterministic inputs only)
+// ---------------------------------------------------------------------------
+export function briefMessages(
+  rollups: Record<string, unknown>,
+  hungers: Array<Record<string, unknown>>,
+): ChatMessage[] {
+  const hungerLines = hungers
+    .slice(0, 5)
+    .map((h) => `- ${h.topic} (score ${h.score}): ${JSON.stringify(h.evidence)}`)
+    .join('\n');
+  return [
+    {
+      role: 'system',
+      content: `You are a principal YouTube strategist writing a private brief for a paying creator. Blunt, numerical, zero fluff. Every number must come from the data provided — invent nothing. ${JSON_ONLY}`,
+    },
+    {
+      role: 'user',
+      content: [
+        'CHANNEL ROLLUPS (their real analytics, 28-day window):',
+        JSON.stringify(rollups),
+        '',
+        'HUNGER CARDS (ranked, with evidence):',
+        hungerLines,
+        '',
+        'TASK: Write the Audience Brief. Contract (JSON):',
+        '{"headline": one killer sentence, "who": who actually watches (demo pyramid + device), "where_when": geography + viewing pattern, "what_they_want": [3-6 strings citing hunger evidence], "retention_truth": the single hardest retention lesson with its number, "next_3_videos": EXACTLY 3 {"title_idea" (ready to produce), "why" (ties to a hunger card number), "hunger_topic"}}',
+        'Tone: like a $2,000/hour consultant who respects the creator enough to be direct.',
+      ].join('\n'),
+    },
+  ];
+}

@@ -34,7 +34,7 @@ export async function registerRoutes(app: FastifyInstance, dependencies: RouteDe
   });
 
   await registerYoutubeRoutes(app, { auth: dependencies.auth, redis: dependencies.redis });
-  await registerAudienceRoutes(app, { auth: dependencies.auth });
+  await registerAudienceRoutes(app, { auth: dependencies.auth, redis: dependencies.redis });
   await registerScriptRoutes(app, { auth: dependencies.auth, redis: dependencies.redis });
 
   app.post('/api/voice/generate', async (request, reply) => {

@@ -5,6 +5,9 @@ import type { AuthService } from '../auth/auth-service.js';
 import { AppError, ForbiddenError } from '../domain/errors.js';
 import { createSupabaseAdmin } from '../youtube/quota-ledger.js';
 import { checkDailyQuota, enqueueGeneration, scriptModuleEnabled } from '../scripts/script-queue.js';
+import { PublishService } from '../scripts/publish-service.js';
+import { buildYoutubeSyncDeps } from '../youtube/sync-queue.js';
+import { createVoiceGenerationService } from '../voice/create-voice-service.js';
 
 /**
  * Crush synthesis API.
@@ -29,6 +32,11 @@ export async function registerScriptRoutes(
   dependencies: ScriptRouteDependencies,
 ): Promise<void> {
   const sb = createSupabaseAdmin();
+  const ytDeps = buildYoutubeSyncDeps(dependencies.redis);
+  const publish = new PublishService(
+    sb, dependencies.redis, createVoiceGenerationService(dependencies.redis),
+    ytDeps.tokens, ytDeps.analytics,
+  );
 
   app.post('/api/scripts/generate', async (request, reply) => {
     if (!scriptModuleEnabled()) {
@@ -96,5 +104,39 @@ export async function registerScriptRoutes(
       throw new ForbiddenError('Not your script');
     }
     return data;
+  });
+
+  const publishSchema = z.object({ videoUrl: z.string().min(11).max(300) });
+
+  // Module P: manual paste — link the published video to its script.
+  app.post<{ Params: { id: string } }>('/api/scripts/:id/publish', async (request, reply) => {
+    const user = await dependencies.auth.authenticate(request.headers);
+    const input = publishSchema.parse(request.body ?? {});
+    const outcome = await publish.recordPublish(user, { scriptId: request.params.id, videoUrl: input.videoUrl });
+    return reply.code(201).send(outcome);
+  });
+
+  app.get<{ Params: { id: string } }>('/api/scripts/:id/outcome', async (request) => {
+    const user = await dependencies.auth.authenticate(request.headers);
+    return publish.getOutcome(user, request.params.id);
+  });
+
+  // Module P: one-click Voice Studio handoff (premium-gated inside the service).
+  const voiceoverSchema = z.object({ voiceAlias: z.enum([
+    'george','brian','daniel','liam','chris','charlie','eric','will',
+    'sarah','alice','matilda','jessica','lily','laura',
+  ]).optional() });
+
+  app.post<{ Params: { id: string } }>('/api/scripts/:id/voiceover', async (request, reply) => {
+    const user = await dependencies.auth.authenticate(request.headers);
+    const input = voiceoverSchema.parse(request.body ?? {});
+    const result = await publish.generateVoiceover(user, request.params.id, input.voiceAlias);
+    return reply
+      .code(200)
+      .header('Content-Type', result.contentType)
+      .header('Content-Length', String(result.audio.length))
+      .header('X-Voice-Provider', result.provider)
+      .header('X-Script-Characters', String(result.characters))
+      .send(result.audio);
   });
 }
