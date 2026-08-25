@@ -14,6 +14,7 @@ import {
 } from './contracts.js';
 import { criticMessages, outlineMessages, packagingMessages, PROMPT_VERSION, repairMessages, scriptMessages } from './prompts-v1.js';
 import { criticVerdict, parseCritic, preCheckPackage } from './critic.js';
+import { ChallengeService } from '../challenge/challenge-service.js';
 
 /**
  * Crush synthesis orchestrator (T‑2B‑02/03).
@@ -34,6 +35,7 @@ export class SynthesisService {
     private readonly sb: SupabaseClient,
     private readonly router: OpenRouterRouter,
     private readonly redis: Redis,
+    private readonly challenge?: ChallengeService,
   ) {}
 
   private async completeJson<T>(
@@ -117,6 +119,8 @@ export class SynthesisService {
           critic: null, cost_usd: guard.spent, hunger_topic: outline.value.hunger_topic,
         });
         logger.info({ userId: input.userId, scriptId }, 'free outline generated');
+        // The Daily Action Script IS the challenge check-in.
+        await this.challenge?.recordDay(input.userId, 'script', scriptId);
         return { status: 'draft', scriptId, kind: 'outline', costUsd: guard.spent };
       }
 
@@ -170,6 +174,7 @@ export class SynthesisService {
             cost_usd: guard.spent, hunger_topic: finalPkg.hunger_topic,
           });
           logger.info({ userId: input.userId, scriptId, total, cost: guard.spent }, 'script package approved by critic');
+          await this.challenge?.recordDay(input.userId, 'script', scriptId);
           return { status: 'draft', scriptId, kind: 'package', total, costUsd: guard.spent };
         }
 

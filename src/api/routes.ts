@@ -12,6 +12,7 @@ import type { VoiceGenerationService } from '../voice/voice-generation-service.j
 import { registerYoutubeRoutes } from './youtube-routes.js';
 import { registerAudienceRoutes } from './audience-routes.js';
 import { registerScriptRoutes } from './script-routes.js';
+import { registerChallengeRoutes } from './challenge-routes.js';
 
 const jobQuerySchema = z.object({ jobId: z.string().uuid() });
 const idempotencyKeySchema = z.string().uuid();
@@ -36,6 +37,7 @@ export async function registerRoutes(app: FastifyInstance, dependencies: RouteDe
   await registerYoutubeRoutes(app, { auth: dependencies.auth, redis: dependencies.redis });
   await registerAudienceRoutes(app, { auth: dependencies.auth, redis: dependencies.redis });
   await registerScriptRoutes(app, { auth: dependencies.auth, redis: dependencies.redis });
+  await registerChallengeRoutes(app, { auth: dependencies.auth });
 
   app.post('/api/voice/generate', async (request, reply) => {
     const user = await dependencies.auth.authenticate(request.headers);

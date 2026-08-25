@@ -6,6 +6,7 @@ import { logger } from '../observability/logger.js';
 import { createSupabaseAdmin } from '../youtube/quota-ledger.js';
 import { createOpenRouterRouter } from '../llm/create-router.js';
 import { SynthesisService, type SynthesisResult } from './synthesis-service.js';
+import { ChallengeService } from '../challenge/challenge-service.js';
 
 /**
  * script-synthesis queue. Daily quotas are Redis fixed windows checked at
@@ -74,7 +75,7 @@ export function createScriptWorker(redis: Redis): Worker<ScriptJob> {
   const config = getConfig();
   const router = createOpenRouterRouter();
   if (!router) throw new Error('script worker requires OPENROUTER_API_KEYS');
-  const synthesis = new SynthesisService(createSupabaseAdmin(), router, redis);
+  const synthesis = new SynthesisService(createSupabaseAdmin(), router, redis, new ChallengeService(createSupabaseAdmin()));
 
   const worker = new Worker<ScriptJob>(
     SCRIPT_QUEUE_NAME,

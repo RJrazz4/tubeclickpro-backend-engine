@@ -10,6 +10,7 @@ import { YouTubeAnalyticsClient } from '../youtube/analytics-client.js';
 import { TokenProvider } from '../youtube/token-provider.js';
 import { rowsToObjects } from '../youtube/analytics-client.js';
 import { logger } from '../observability/logger.js';
+import { ChallengeService } from '../challenge/challenge-service.js';
 
 /**
  * Module P — publish tracker (manual paste v1) + Voice Studio handoff.
@@ -57,6 +58,7 @@ export class PublishService {
     private readonly voice: VoiceGenerationService,
     private readonly tokens: TokenProvider,
     private readonly analytics: YouTubeAnalyticsClient,
+    private readonly challenge?: ChallengeService,
   ) {}
 
   /** Manual paste: link a published video to its script. */

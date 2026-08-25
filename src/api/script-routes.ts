@@ -6,6 +6,7 @@ import { AppError, ForbiddenError } from '../domain/errors.js';
 import { createSupabaseAdmin } from '../youtube/quota-ledger.js';
 import { checkDailyQuota, enqueueGeneration, scriptModuleEnabled } from '../scripts/script-queue.js';
 import { PublishService } from '../scripts/publish-service.js';
+import { ChallengeService } from '../challenge/challenge-service.js';
 import { buildYoutubeSyncDeps } from '../youtube/sync-queue.js';
 import { createVoiceGenerationService } from '../voice/create-voice-service.js';
 
@@ -35,7 +36,7 @@ export async function registerScriptRoutes(
   const ytDeps = buildYoutubeSyncDeps(dependencies.redis);
   const publish = new PublishService(
     sb, dependencies.redis, createVoiceGenerationService(dependencies.redis),
-    ytDeps.tokens, ytDeps.analytics,
+    ytDeps.tokens, ytDeps.analytics, new ChallengeService(sb),
   );
 
   app.post('/api/scripts/generate', async (request, reply) => {
