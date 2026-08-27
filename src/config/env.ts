@@ -81,8 +81,8 @@ const schema = z
     // App-held master key for AES-256-GCM token encryption. Required when the
     // module is enabled; any length >= 16 chars (key = SHA-256 of the secret).
     YOUTUBE_TOKEN_MASTER_KEY: z.string().default(''),
-    YOUTUBE_CONNECT_SUCCESS_URL: z.string().default('https://tubeclickpro.in/settings?youtube=connected'),
-    YOUTUBE_CONNECT_ERROR_URL: z.string().default('https://tubeclickpro.in/settings?youtube=error'),
+    YOUTUBE_CONNECT_SUCCESS_URL: z.string().default('https://tubeclickpro.in/dashboard?youtube=connected'),
+    YOUTUBE_CONNECT_ERROR_URL: z.string().default('https://tubeclickpro.in/dashboard?youtube=error'),
     // Backfill depth on connect (days) and per-request chunk size.
     YOUTUBE_BACKFILL_DAYS: z.coerce.number().int().min(7).max(365).default(90),
     YOUTUBE_SYNC_CHUNK_DAYS: z.coerce.number().int().min(7).max(28).default(28),

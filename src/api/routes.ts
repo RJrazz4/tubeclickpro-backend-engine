@@ -28,6 +28,23 @@ export interface RouteDependencies {
 export async function registerRoutes(app: FastifyInstance, dependencies: RouteDependencies): Promise<void> {
   app.get('/healthz', async () => ({ status: 'ok', service: 'tubeclickpro-backend-engine' }));
 
+  // OAuth safety net: if Google's redirect URI is ever configured without
+  // the callback path (e.g. the deployment root), ?code&state would land
+  // here and 404. Forward those to the real callback instead so the
+  // connect flow never dead-ends; otherwise serve as the AWS ALB/target
+  // group health endpoint.
+  app.get('/', async (request, reply) => {
+    const q = (request.query ?? {}) as Record<string, string | undefined>;
+    if ((q.code && q.state) || q.error) {
+      const target = new URL('/api/youtube/callback', 'http://localhost');
+      for (const key of ['code', 'state', 'error', 'scope'] as const) {
+        if (q[key]) target.searchParams.set(key, q[key] as string);
+      }
+      return reply.redirect(target.pathname + target.search, 302);
+    }
+    return { status: 'ok', service: 'tubeclickpro-backend-engine', time: new Date().toISOString() };
+  });
+
   app.get('/readyz', async (_request, reply) => {
     const pong = await dependencies.redis.ping();
     if (pong !== 'PONG') return reply.code(503).send({ status: 'not-ready' });
