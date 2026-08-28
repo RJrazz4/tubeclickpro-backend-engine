@@ -22,9 +22,15 @@ export class SupabaseAuthService implements AuthService {
 
   constructor() {
     const config = getConfig();
+    if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
+      throw new Error('Supabase authentication is not configured. Please set SUPABASE_URL and SUPABASE_ANON_KEY environment variables.');
+    }
     this.authClient = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    if (!config.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('Supabase service role key is required. Please set SUPABASE_SERVICE_ROLE_KEY environment variable.');
+    }
     this.adminClient = createClient(config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -33,7 +39,15 @@ export class SupabaseAuthService implements AuthService {
   async authenticate(headers: IncomingHttpHeaders): Promise<AuthenticatedUser> {
     const token = bearerToken(headers);
     const { data, error } = await this.authClient.auth.getUser(token);
-    if (error || !data.user) throw new UnauthorizedError('Invalid or expired Supabase session');
+    if (error || !data.user) {
+      const errorMessage = error?.message || 'Invalid or expired Supabase session';
+      const isJwtError = errorMessage.includes('JWT') || errorMessage.includes('token');
+      throw new UnauthorizedError(
+        isJwtError 
+          ? 'Invalid or expired authentication token. Please sign in again.'
+          : 'Authentication required. Please sign in to access this feature.'
+      );
+    }
 
     const config = getConfig();
     if (config.SUPABASE_TIER_SOURCE === 'rpc') {

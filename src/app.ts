@@ -30,10 +30,25 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(helmet, { contentSecurityPolicy: false });
+  
+  // Enhanced CORS configuration with wildcard support for development
+  // and explicit origins for production
+  const corsOrigins = config.CORS_ORIGINS.split(',').map((origin) => origin.trim());
+  const isProduction = config.NODE_ENV === 'production';
+  
+  // In production, ensure we have explicit origins. Add common defaults if not configured
+  const productionOrigins = isProduction 
+    ? [...new Set([...corsOrigins, 'https://tubeclickpro.in', 'https://www.tubeclickpro.in'])]
+    : corsOrigins;
+  
   await app.register(cors, {
-    origin: config.CORS_ORIGINS.split(',').map((origin) => origin.trim()),
+    origin: productionOrigins.length > 0 
+      ? productionOrigins
+      : (isProduction ? ['https://tubeclickpro.in'] : true),
     credentials: true,
-    exposedHeaders: ['X-Voice-Provider', 'X-Voice-Fallback-Depth'],
+    exposedHeaders: ['X-Voice-Provider', 'X-Voice-Fallback-Depth', 'Retry-After'],
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS', 'PATCH', 'PUT'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key', 'X-Request-Id', 'X-Dev-User-Id', 'X-Dev-Tier'],
   });
 
   const redis = createRedisConnection();
