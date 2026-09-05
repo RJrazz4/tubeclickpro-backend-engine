@@ -5,6 +5,7 @@ import { ZodError } from 'zod';
 import { registerRoutes } from './api/routes.js';
 import { createAuthService } from './auth/auth-service.js';
 import { getConfig } from './config/env.js';
+import { buildCorsOriginOption } from './config/cors.js';
 import { AppError } from './domain/errors.js';
 import { createRedisConnection } from './infrastructure/redis.js';
 import { createRunRepository } from './persistence/supabase-run-repository.js';
@@ -31,20 +32,20 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(helmet, { contentSecurityPolicy: false });
   
-  // Enhanced CORS configuration with wildcard support for development
-  // and explicit origins for production
-  const corsOrigins = config.CORS_ORIGINS.split(',').map((origin) => origin.trim());
-  const isProduction = config.NODE_ENV === 'production';
-  
-  // In production, ensure we have explicit origins. Add common defaults if not configured
-  const productionOrigins = isProduction 
-    ? [...new Set([...corsOrigins, 'https://tubeclickpro.in', 'https://www.tubeclickpro.in'])]
-    : corsOrigins;
-  
+  // CORS for the split deployment: frontend on Vercel, backend on Render.
+  // Always include the configured origins + the custom domain; the matcher
+  // additionally whitelists the Vercel `*.vercel.app` domain(s) and loopback
+  // so the frontend can always reach this backend regardless of which Vercel
+  // URL it is served from.
+  const corsOrigins = config.CORS_ORIGINS.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const staticOrigins = [
+    ...new Set([...corsOrigins, 'https://tubeclickpro.in', 'https://www.tubeclickpro.in']),
+  ];
+
   await app.register(cors, {
-    origin: productionOrigins.length > 0 
-      ? productionOrigins
-      : (isProduction ? ['https://tubeclickpro.in'] : true),
+    origin: buildCorsOriginOption(staticOrigins),
     credentials: true,
     exposedHeaders: ['X-Voice-Provider', 'X-Voice-Fallback-Depth', 'Retry-After'],
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS', 'PATCH', 'PUT'],
