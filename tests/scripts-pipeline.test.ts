@@ -128,6 +128,9 @@ describe('grounding + prompt assembly (no data, no text)', () => {
     expect(blob).toContain('37.7');
     expect(blob).toContain('Hinglish');
     expect(scriptMessages({ grounding, groundingJson: JSON.stringify(grounding), bannedPhrases: [] }, {}).length).toBe(2);
-    expect(PROMPT_VERSION).toBe('v1');
+    expect(PROMPT_VERSION).toBe('v2-lsa');
+    // LSA persona is wired into the system prompt of every generative stage.
+    expect(msgs[0].content).toContain('Limbic System Architect');
+    expect(scriptMessages({ grounding, groundingJson: JSON.stringify(grounding), bannedPhrases: [] }, {}).map((m) => m.content).join('\n')).toContain('DIRECTORIAL CUES');
   });
 });

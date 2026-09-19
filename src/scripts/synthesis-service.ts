@@ -44,11 +44,13 @@ export class SynthesisService {
     guard: CostGuard,
     schema: z.ZodType<T>,
     temperature: number,
+    topP?: number,
   ): Promise<{ value: T; costUsd: number }> {
     let lastRaw = '';
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      const sampling = topP !== undefined ? { top_p: topP } : {};
       const extra = attempt === 0
-        ? { temperature, max_tokens: 4096 }
+        ? { temperature, ...sampling, max_tokens: 4096 }
         : { temperature: 0, max_tokens: 4096 };
       const result = await this.router.complete(
         attempt === 0 ? messages : [...messages, { role: 'user', content: 'Your previous output was invalid JSON. Return the corrected JSON only.' }],
@@ -110,7 +112,7 @@ export class SynthesisService {
     try {
       // ---- Stage 1: outline (free deliverable / premium scaffold) ----
       const outline = await this.completeJson(
-        outlineMessages(stageInput), model, guard, outlineSkeletonSchema, 0.7,
+        outlineMessages(stageInput), model, guard, outlineSkeletonSchema, 0.85, 0.95,
       );
 
       if (input.tier === 'free') {
@@ -126,12 +128,12 @@ export class SynthesisService {
 
       // ---- Stage 2: full script (premium) ----
       const script = await this.completeJson(
-        scriptMessages(stageInput, outline.value), model, guard, z.record(z.string(), z.unknown()), 0.6,
+        scriptMessages(stageInput, outline.value), model, guard, z.record(z.string(), z.unknown()), 0.9, 0.95,
       );
 
       // ---- Stage 3: packaging (merged into the script object) ----
       const packaged = await this.completeJson(
-        packagingMessages(stageInput, script.value), model, guard, z.record(z.string(), z.unknown()), 0.9,
+        packagingMessages(stageInput, script.value), model, guard, z.record(z.string(), z.unknown()), 0.95, 0.95,
       );
 
       // ---- Pre-checks (cheap) → LLM critic (≤2 repairs) ----
