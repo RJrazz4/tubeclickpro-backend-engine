@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { getConfig } from '../config/env.js';
 import { createRedisConnection } from '../infrastructure/redis.js';
 import { JobStore } from '../services/job-store.js';
+import { registerTrendTools } from '../trends/tools.js';
+import { TrendRadarService } from '../trends/trend-service.js';
 
 const config = getConfig();
 const redis = createRedisConnection();
@@ -54,6 +56,9 @@ server.registerTool(
     return { content: [{ type: 'text', text: JSON.stringify({ available: Boolean(data), profile: data }) }] };
   },
 );
+
+// Zero-cost Trend Radar tools (keyless public YouTube intelligence).
+registerTrendTools(server, new TrendRadarService(redis));
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
