@@ -22,6 +22,7 @@ import {
   youtubeSyncModuleEnabled,
 } from './youtube/sync-queue.js';
 import { createScriptWorker, scriptModuleEnabled } from './scripts/script-queue.js';
+import { createClipWorker, clipModuleEnabled } from './clips/clip-queue.js';
 
 const config = getConfig();
 const redis = createRedisConnection();
@@ -46,6 +47,13 @@ if (scriptModuleEnabled()) {
   const scriptWorker = createScriptWorker(redis);
   workers.push(scriptWorker as unknown as Worker<ViralDnaJobPayload>);
   logger.info({ queue: 'script-synthesis' }, 'script synthesis worker started');
+}
+
+// Zero-Cost Viral Shorts Clipper worker — started only when CLIPS_ENABLED.
+if (clipModuleEnabled()) {
+  const clipWorker = createClipWorker(redis);
+  workers.push(clipWorker as unknown as Worker<ViralDnaJobPayload>);
+  logger.info({ queue: 'clip-render', concurrency: config.CLIPS_WORKER_CONCURRENCY }, 'clip render worker started');
 }
 
 // YouTube Signal Link worker (Module O/S) — started only when configured.

@@ -14,6 +14,7 @@ import { registerAudienceRoutes } from './audience-routes.js';
 import { registerScriptRoutes } from './script-routes.js';
 import { registerChallengeRoutes } from './challenge-routes.js';
 import { registerTrendRoutes } from './trend-routes.js';
+import { registerClipRoutes } from './clip-routes.js';
 
 const jobQuerySchema = z.object({ jobId: z.string().uuid() });
 const idempotencyKeySchema = z.string().uuid();
@@ -57,6 +58,7 @@ export async function registerRoutes(app: FastifyInstance, dependencies: RouteDe
   await registerScriptRoutes(app, { auth: dependencies.auth, redis: dependencies.redis });
   await registerChallengeRoutes(app, { auth: dependencies.auth });
   await registerTrendRoutes(app, { auth: dependencies.auth, redis: dependencies.redis });
+  await registerClipRoutes(app, { auth: dependencies.auth, redis: dependencies.redis });
 
   app.post('/api/voice/generate', async (request, reply) => {
     const user = await dependencies.auth.authenticate(request.headers);

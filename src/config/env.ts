@@ -108,6 +108,22 @@ const schema = z
     MCP_CONTEXT_COMMAND: z.string().default('node'),
     MCP_CONTEXT_ARGS: z.string().default('dist/mcp/server.js'),
     MCP_TOOL_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(10000),
+
+    // Zero-Cost Viral Shorts Clipper. Disabled until CLIPS_ENABLED=true, so the
+    // routes 503 and no worker starts until the toolchain + storage are provisioned.
+    CLIPS_ENABLED: booleanFromEnv,
+    CLIPS_YTDLP_BIN: z.string().default('yt-dlp'),
+    CLIPS_STORAGE_BUCKET: z.string().default('clips'),
+    CLIPS_MAX_DURATION_SECONDS: z.coerce.number().int().min(5).max(180).default(30),
+    CLIPS_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(1),
+    CLIPS_QUEUE_RATE_MAX: z.coerce.number().int().min(1).default(6),
+    CLIPS_QUEUE_RATE_DURATION_MS: z.coerce.number().int().min(1000).default(60_000),
+    CLIPS_FREE_PER_DAY: z.coerce.number().int().min(1).default(3),
+    CLIPS_PREMIUM_PER_DAY: z.coerce.number().int().min(1).default(30),
+    CLIPS_YTDLP_TIMEOUT_MS: z.coerce.number().int().min(5000).max(300_000).default(120_000),
+    CLIPS_FFMPEG_TIMEOUT_MS: z.coerce.number().int().min(5000).max(600_000).default(180_000),
+    CLIPS_OUTPUT_WIDTH: z.coerce.number().int().min(240).max(2160).default(1080),
+    CLIPS_OUTPUT_HEIGHT: z.coerce.number().int().min(320).max(3840).default(1920),
   })
   .superRefine((value, context) => {
     if (value.NODE_ENV === 'production' && value.AUTH_MODE === 'development') {
