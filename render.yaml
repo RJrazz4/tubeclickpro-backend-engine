@@ -1,0 +1,57 @@
+# Render Blueprint — Zero-Cost Viral Shorts Clipper worker.
+#
+# This defines ONLY the dedicated clip-render worker (a Docker background worker
+# bundling ffmpeg + yt-dlp). Your existing web + worker services were created
+# manually and are untouched by this file.
+#
+# Two ways to provision:
+#   A) Blueprint: Render → New → Blueprint → point at this repo (creates the
+#      service below). Fill the `sync: false` secrets in the dashboard.
+#   B) Manual: New → Background Worker → Runtime: Docker → Dockerfile path
+#      `./Dockerfile` → set the same env vars.
+#
+# CRITICAL: this worker MUST share the SAME REDIS_URL and REDIS_KEY_PREFIX as the
+# web service, or it will listen on a different queue and never pick up jobs.
+
+services:
+  - type: worker
+    name: tubeclickpro-clip-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free            # if Render requires paid for background workers, use starter
+    branch: main
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_MODE
+        value: supabase
+      # ── shared with the web service (must match exactly) ──
+      - key: REDIS_URL
+        sync: false        # e.g. your existing Upstash/Render Redis connection string
+      - key: REDIS_KEY_PREFIX
+        value: tubeclickpro
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # ── clipper ──
+      - key: CLIPS_ENABLED
+        value: "true"
+      - key: CLIPS_STORAGE_BUCKET
+        value: clips
+      - key: CLIPS_WORKER_CONCURRENCY
+        value: "1"          # 1 on free/512MB — ffmpeg is CPU/RAM heavy
+      - key: CLIPS_MAX_DURATION_SECONDS
+        value: "30"
+      - key: CLIPS_FREE_PER_DAY
+        value: "3"
+      - key: CLIPS_PREMIUM_PER_DAY
+        value: "30"
+      - key: FFMPEG_BIN
+        value: ffmpeg
+      - key: CLIPS_YTDLP_BIN
+        value: yt-dlp
