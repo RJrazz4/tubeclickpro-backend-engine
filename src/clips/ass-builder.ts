@@ -64,13 +64,26 @@ function karaokeLine(cue: CaptionCue): string {
 
 export function buildAss(
   cues: CaptionCue[],
-  opts: { style?: CaptionStyle; playResX?: number; playResY?: number } = {},
+  opts: {
+    style?: CaptionStyle;
+    playResX?: number;
+    playResY?: number;
+    /** Optional scroll-stopper hook line rendered top-center with a fade (premium). */
+    hookText?: string;
+    hookDurationSeconds?: number;
+  } = {},
 ): string {
   const styleName = opts.style ?? 'karaoke';
   const spec = STYLES[styleName];
   const playResX = opts.playResX ?? 1080;
   const playResY = opts.playResY ?? 1920;
   const scaledSize = Math.round((spec.size / 100) * playResY * 0.5);
+  const isPortrait = playResY > playResX;
+
+  // Safe-zone floor: never let captions burn under the Shorts/TikTok chrome
+  // (ViralMint raises margins to a minimum, never lowers them).
+  const marginV = Math.max(spec.marginV, isPortrait ? Math.round(playResY * 0.09) : 40);
+  const outlineW = Math.max(3, spec.outlineWidth);
 
   const header = [
     '[Script Info]',
@@ -79,14 +92,22 @@ export function buildAss(
     `PlayResY: ${playResY}`,
     'WrapStyle: 0',
     'ScaledBorderAndShadow: yes',
+    'YCbCr Matrix: TV.709',
     '',
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-    `Style: Default,${spec.font},${scaledSize},${spec.primary},&H0000FFFF,${spec.outline},&H64000000,${spec.bold ? -1 : 0},0,0,0,100,100,0,0,1,${spec.outlineWidth},1,${spec.alignment},80,80,${spec.marginV},1`,
-    '',
-    '[Events]',
-    'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
+    `Style: Default,${spec.font},${scaledSize},${spec.primary},&H0000FFFF,${spec.outline},&H80000000,${spec.bold ? -1 : 0},0,0,0,100,100,0,0,1,${outlineW},2,${spec.alignment},80,80,${marginV},1`,
   ];
+
+  // Premium hook overlay: top-center (Alignment=8), ~2.2x caption size, thick
+  // black outline, short fade — the scroll-stopper.
+  const hook = opts.hookText ? escapeAss(opts.hookText) : '';
+  if (hook) {
+    const hookSize = Math.round(scaledSize * 2.2);
+    const hookMargin = isPortrait ? Math.round(playResY * 0.1) : 80;
+    header.push(`Style: Hook,${spec.font},${hookSize},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,2,8,40,40,${hookMargin},1`);
+  }
+  header.push('', '[Events]', 'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text');
 
   const events = cues
     .filter((c) => c.text && c.text.trim().length > 0 && c.end > c.start)
@@ -94,6 +115,12 @@ export function buildAss(
       const text = styleName === 'karaoke' ? karaokeLine(c) : escapeAss(c.text);
       return `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${text}`;
     });
+
+  if (hook) {
+    const dur = Math.max(1, opts.hookDurationSeconds ?? 4);
+    const fad = `{${String.fromCharCode(92)}fad(300,500)}`;
+    events.unshift(`Dialogue: 1,${assTime(0)},${assTime(dur)},Hook,,0,0,0,,${fad}${hook}`);
+  }
 
   return `${header.join('\n')}\n${events.join('\n')}\n`;
 }

@@ -12,3 +12,7 @@ __pycache__/
 .venv/
 .tmp/
 tmp/
+
+# Face-tracking model is downloaded at image build time, not committed
+models/
+*.onnx

@@ -124,6 +124,14 @@ const schema = z
     CLIPS_FFMPEG_TIMEOUT_MS: z.coerce.number().int().min(5000).max(600_000).default(180_000),
     CLIPS_OUTPUT_WIDTH: z.coerce.number().int().min(240).max(2160).default(1080),
     CLIPS_OUTPUT_HEIGHT: z.coerce.number().int().min(320).max(3840).default(1920),
+    // Dynamic face-tracking crop (YuNet via a Python helper). Falls back to the
+    // static center crop when disabled or when python/OpenCV/model are missing,
+    // so a render never hard-fails because tracking was unavailable.
+    CLIPS_FACE_TRACK_ENABLED: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
+    CLIPS_FACE_TRACK_FPS: z.coerce.number().min(1).max(30).default(6),
+    CLIPS_FACE_TRACK_TIMEOUT_MS: z.coerce.number().int().min(5000).max(300_000).default(90_000),
+    CLIPS_FACE_MODEL_PATH: z.string().default('workers/python/models/face_detection_yunet_2023mar.onnx'),
+    FFPROBE_BIN: z.string().default('ffprobe'),
   })
   .superRefine((value, context) => {
     if (value.NODE_ENV === 'production' && value.AUTH_MODE === 'development') {

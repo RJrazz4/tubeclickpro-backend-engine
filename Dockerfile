@@ -22,9 +22,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NODE_ENV=production \
     PIP_NO_CACHE_DIR=1
 
-# ffmpeg (encode) + ca-certificates (TLS) + curl (fetch yt-dlp).
+# ffmpeg/ffprobe (encode + probe) + ca-certificates (TLS) + curl (fetch yt-dlp)
+# + python3/pip (the optional YuNet face-tracking helper).
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
+ && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl python3 python3-pip \
  && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp standalone Linux binary (no Python needed). Pin via --build-arg
@@ -45,7 +46,17 @@ RUN set -eux; \
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/workers ./workers
 COPY --from=build /app/package*.json ./
+
+# Face-tracking deps: OpenCV (headless) + the free YuNet ONNX face model (~230KB).
+# Optional at runtime — the worker falls back to a static center crop if the
+# helper, OpenCV, or the model is unavailable, so a render never hard-fails.
+RUN pip3 install --no-cache-dir --break-system-packages opencv-python-headless numpy \
+ && mkdir -p /app/workers/python/models \
+ && curl -fsSL "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx" \
+      -o /app/workers/python/models/face_detection_yunet_2023mar.onnx \
+ && python3 -c "import cv2; assert cv2.FaceDetectorYN; print('cv2', cv2.__version__, 'YuNet OK')"
 
 # Run as a non-root user; temp media goes to /tmp (world-writable).
 RUN useradd -m -u 1001 clipper && chown -R clipper:clipper /app

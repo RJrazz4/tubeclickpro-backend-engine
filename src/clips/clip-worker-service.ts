@@ -7,7 +7,8 @@ import { logger } from '../observability/logger.js';
 import { ClipStateStore } from './clip-state.js';
 import { buildAss, type CaptionCue } from './ass-builder.js';
 import { parseCaptions, sliceCues } from './captions.js';
-import { ffmpegVerticalBurnArgs, ytdlpCaptionArgs, ytdlpSectionArgs } from './media-args.js';
+import { ffmpegVerticalBurnArgs, probeVideo, ytdlpCaptionArgs, ytdlpSectionArgs } from './media-args.js';
+import { buildFaceTrackExpression, type FaceCenter } from './face-track.js';
 import { execFileRunner, type CommandRunner } from './media-runner.js';
 import { MomentSelector } from './moment-selector.js';
 import type { ClipStore } from './clip-store.js';
@@ -113,6 +114,10 @@ export class ClipWorkerService {
       const assPath = join(workDir, 'captions.ass');
       await writeFile(assPath, ass, 'utf8');
 
+      // 5b — dynamic face-tracking crop (best-effort; center crop on any failure)
+      report(64, 'face-track');
+      const dynamicCrop = await this.detectFaceCrop(inputPath, selection.durationSeconds, job.jobId);
+
       // 6 — single-pass vertical burn-in
       report(72, 'encode');
       const outputPath = join(workDir, 'out.mp4');
@@ -122,6 +127,7 @@ export class ClipWorkerService {
           width: this.config.CLIPS_OUTPUT_WIDTH,
           height: this.config.CLIPS_OUTPUT_HEIGHT,
           durationSeconds: selection.durationSeconds,
+          ...(dynamicCrop ? { dynamicCrop } : {}),
         }),
         { timeoutMs: this.config.CLIPS_FFMPEG_TIMEOUT_MS, cwd: workDir },
       );
@@ -140,6 +146,59 @@ export class ClipWorkerService {
       throw err;
     } finally {
       await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
+  /**
+   * Best-effort dynamic face-tracking crop. The input is already the trimmed
+   * section (yt-dlp downloaded only [start, start+duration]), so detection runs
+   * from t=0. Probes the source, runs the YuNet Python helper for per-sample
+   * face centers, and compiles a per-frame crop-x expression. Returns undefined
+   * on ANY failure (disabled, no python/OpenCV/model, no faces) so the render
+   * falls back to the static center crop instead of hard-failing.
+   */
+  private async detectFaceCrop(
+    inputPath: string,
+    durationSeconds: number,
+    jobId: string,
+  ): Promise<{ sourceWidth: number; sourceHeight: number; xExpression: string } | undefined> {
+    if (!this.config.CLIPS_FACE_TRACK_ENABLED) return undefined;
+    try {
+      const probe = await probeVideo(inputPath, { ffprobePath: this.config.FFPROBE_BIN });
+      const { stdout } = await this.runner(
+        this.config.PYTHON_BIN,
+        [
+          'workers/python/face_track.py',
+          '--video',
+          inputPath,
+          '--model',
+          this.config.CLIPS_FACE_MODEL_PATH,
+          '--start',
+          '0',
+          '--duration',
+          String(durationSeconds),
+          '--fps',
+          String(this.config.CLIPS_FACE_TRACK_FPS),
+        ],
+        // No cwd: script + model paths are relative to the app root (process.cwd()).
+        { timeoutMs: this.config.CLIPS_FACE_TRACK_TIMEOUT_MS },
+      );
+      const parsed = JSON.parse(stdout) as { centers?: FaceCenter[]; sampleFps?: number };
+      const centers = parsed.centers ?? [];
+      if (centers.length === 0) return undefined;
+      const xExpression = buildFaceTrackExpression(centers, {
+        sourceWidth: probe.width,
+        sourceHeight: probe.height,
+        targetWidth: this.config.CLIPS_OUTPUT_WIDTH,
+        targetHeight: this.config.CLIPS_OUTPUT_HEIGHT,
+        fps: parsed.sampleFps ?? this.config.CLIPS_FACE_TRACK_FPS,
+      });
+      if (!xExpression) return undefined;
+      logger.info({ jobId, samples: centers.length }, 'face-track crop engaged');
+      return { sourceWidth: probe.width, sourceHeight: probe.height, xExpression };
+    } catch (err) {
+      logger.warn({ jobId, error: (err as Error).message }, 'face-track unavailable; using center crop');
+      return undefined;
     }
   }
 }
