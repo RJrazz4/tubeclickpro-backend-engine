@@ -34,12 +34,17 @@ describe('clip-input', () => {
   });
 
   it('produces a deterministic, change-sensitive idempotency key', () => {
-    const a = clipIdempotencyKey('u1', 'aaaaaaaaaaa', 0, 30, 'karaoke');
-    const b = clipIdempotencyKey('u1', 'aaaaaaaaaaa', 0, 30, 'karaoke');
-    const c = clipIdempotencyKey('u1', 'aaaaaaaaaaa', 5, 30, 'karaoke');
+    const a = clipIdempotencyKey('u1', 'aaaaaaaaaaa', 0, 30, 'karaoke', false);
+    const b = clipIdempotencyKey('u1', 'aaaaaaaaaaa', 0, 30, 'karaoke', false);
+    const c = clipIdempotencyKey('u1', 'aaaaaaaaaaa', 5, 30, 'karaoke', false);
     expect(a).toBe(b);
     expect(a).not.toBe(c);
     expect(a.startsWith('clip:')).toBe(true);
+    // autoSelect ignores the caller's start (the engine picks the window)
+    const d = clipIdempotencyKey('u1', 'aaaaaaaaaaa', 0, 30, 'karaoke', true);
+    const e = clipIdempotencyKey('u1', 'aaaaaaaaaaa', 99, 30, 'karaoke', true);
+    expect(d).toBe(e);
+    expect(d).not.toBe(a);
   });
 });
 
@@ -82,6 +87,7 @@ describe('media-args (shell-free arg arrays)', () => {
   it('caption args skip download and use the canonical url', () => {
     const args = ytdlpCaptionArgs('aaaaaaaaaaa', '/tmp/x/cap.%(ext)s');
     expect(args).toContain('--skip-download');
+    expect(args).toContain('json3/vtt/best');
     expect(args).toContain('--restrict-filenames');
     expect(args[args.length - 1]).toBe('https://www.youtube.com/watch?v=aaaaaaaaaaa');
   });

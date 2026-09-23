@@ -19,6 +19,9 @@ export const clipRequestSchema = z.object({
   startSeconds: z.number().int().min(0).max(86_400).default(0),
   durationSeconds: z.number().int().min(5).max(60).default(30),
   captionStyle: z.enum(CAPTION_STYLES).default('karaoke'),
+  // When true (default) the engine auto-selects the highest-retention window;
+  // when false the caller's startSeconds is honored.
+  autoSelect: z.boolean().default(true),
 });
 
 export type ClipRequest = z.infer<typeof clipRequestSchema>;
@@ -56,7 +59,8 @@ export function clipIdempotencyKey(
   startSeconds: number,
   durationSeconds: number,
   captionStyle: CaptionStyle,
+  autoSelect: boolean,
 ): string {
-  const raw = `${userId}|${videoId}|${startSeconds}|${durationSeconds}|${captionStyle}`;
+  const raw = `${userId}|${videoId}|${autoSelect ? 'auto' : startSeconds}|${durationSeconds}|${captionStyle}`;
   return `clip:${createHash('sha256').update(raw).digest('hex').slice(0, 40)}`;
 }

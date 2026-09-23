@@ -42,6 +42,7 @@ const JOB: ClipJob = {
   startSeconds: 0,
   durationSeconds: 30,
   captionStyle: 'karaoke',
+  autoSelect: false,
 };
 
 beforeAll(async () => {
@@ -116,5 +117,44 @@ describe('ClipWorkerService.render', () => {
     expect(state?.status).toBe('failed');
     expect(state?.error).toContain('encoder exploded');
     expect(store.objects.size).toBe(0);
+  });
+
+  it('auto-selects the window and downloads exactly that section', async () => {
+    const redis = fakeRedis();
+    const store = new InMemoryClipStore();
+    const states = new ClipStateStore(redis);
+    const autoJob: ClipJob = { ...JOB, jobId: 'clip:auto1', autoSelect: true };
+    await states.init(autoJob.jobId, autoJob.userId);
+
+    let sectionArg = '';
+    const runner: CommandRunner = async (bin, args, opts) => {
+      const dir = opts.cwd ?? '';
+      if (bin.includes('yt-dlp')) {
+        if (args.includes('--skip-download')) await writeFile(join(dir, 'cap.en.vtt'), VTT, 'utf8');
+        else {
+          const i = args.indexOf('--download-sections');
+          sectionArg = args[i + 1] ?? '';
+          await writeFile(join(dir, 'src.mp4'), Buffer.from('x'));
+        }
+        return { stdout: '', stderr: '' };
+      }
+      const out = args[args.length - 1];
+      if (out) await writeFile(out, Buffer.from('clip'));
+      return { stdout: '', stderr: '' };
+    };
+
+    // Stub selector: pretend the viral peak starts at 2s.
+    const selector = {
+      select: async () => ({ startSeconds: 2, durationSeconds: 30, reason: 'stub peak', peakType: 'spike' }),
+    } as unknown as import('../src/clips/moment-selector.js').MomentSelector;
+
+    const service = new ClipWorkerService({ redis, store, runner, selector });
+    const result = await service.render(autoJob);
+
+    expect(sectionArg).toBe('*2-32');
+    expect(result.selection).toMatchObject({ startSeconds: 2, peakType: 'spike' });
+    const state = await states.get(autoJob.jobId);
+    expect(state?.status).toBe('completed');
+    expect(state?.selection?.startSeconds).toBe(2);
   });
 });

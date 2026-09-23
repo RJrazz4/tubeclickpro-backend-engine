@@ -9,6 +9,13 @@ import { redisKey } from '../infrastructure/redis.js';
 
 export type ClipStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
+export interface ClipSelection {
+  startSeconds: number;
+  durationSeconds: number;
+  reason: string;
+  peakType: string;
+}
+
 export interface ClipState {
   jobId: string;
   userId: string;
@@ -17,6 +24,7 @@ export interface ClipState {
   stage?: string;
   url?: string;
   error?: string;
+  selection?: ClipSelection;
   createdAt: string;
   updatedAt: string;
 }

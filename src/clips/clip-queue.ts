@@ -4,9 +4,11 @@ import { getConfig } from '../config/env.js';
 import { createRedisConnection, redisKey } from '../infrastructure/redis.js';
 import { logger } from '../observability/logger.js';
 import { createSupabaseAdmin } from '../youtube/quota-ledger.js';
+import { createOpenRouterRouter } from '../llm/create-router.js';
 import { ClipStateStore } from './clip-state.js';
 import { SupabaseClipStore } from './clip-store.js';
 import { ClipWorkerService } from './clip-worker-service.js';
+import { MomentSelector } from './moment-selector.js';
 import { clipIdempotencyKey, type CaptionStyle } from './clip-input.js';
 
 /**
@@ -26,6 +28,7 @@ export type ClipJob = {
   startSeconds: number;
   durationSeconds: number;
   captionStyle: CaptionStyle;
+  autoSelect: boolean;
 };
 
 export function createClipQueue(redis: Redis): Queue<ClipJob> {
@@ -65,7 +68,7 @@ export async function enqueueClip(
   redis: Redis,
   job: Omit<ClipJob, 'jobId'>,
 ): Promise<{ jobId: string; deduped: boolean }> {
-  const jobId = clipIdempotencyKey(job.userId, job.videoId, job.startSeconds, job.durationSeconds, job.captionStyle);
+  const jobId = clipIdempotencyKey(job.userId, job.videoId, job.startSeconds, job.durationSeconds, job.captionStyle, job.autoSelect);
   const full: ClipJob = { ...job, jobId };
   const queue = createClipQueue(redis);
   try {
@@ -87,7 +90,10 @@ export function clipModuleEnabled(): boolean {
 export function createClipWorker(redis: Redis): Worker<ClipJob> {
   const config = getConfig();
   const store = new SupabaseClipStore(createSupabaseAdmin(), config.CLIPS_STORAGE_BUCKET);
-  const service = new ClipWorkerService({ redis, store, config });
+  // Free-tier model for viral-moment selection (zero API cost); null router →
+  // the selector transparently falls back to the deterministic heuristic.
+  const selector = new MomentSelector({ router: createOpenRouterRouter(), model: config.OPENROUTER_MODEL_FREE });
+  const service = new ClipWorkerService({ redis, store, config, selector });
 
   const worker = new Worker<ClipJob>(
     CLIP_QUEUE_NAME,

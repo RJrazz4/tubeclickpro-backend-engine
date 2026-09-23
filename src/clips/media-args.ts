@@ -24,7 +24,7 @@ export function ytdlpCaptionArgs(videoId: string, outTemplate: string, opts: Ytd
     '--sub-langs',
     'en.*,en',
     '--sub-format',
-    'vtt',
+    'json3/vtt/best',
     '--restrict-filenames',
     '--no-playlist',
     '--no-warnings',

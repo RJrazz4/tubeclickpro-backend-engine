@@ -69,13 +69,14 @@ export async function registerClipRoutes(
       startSeconds,
       durationSeconds,
       captionStyle: input.captionStyle,
+      autoSelect: input.autoSelect,
     });
 
     return reply.code(202).send({
       status: deduped ? 'deduped' : 'queued',
       jobId,
       videoId,
-      window: { startSeconds, durationSeconds },
+      window: { autoSelect: input.autoSelect, startSeconds, durationSeconds },
       quota: { used: quota.used, limit: quota.limit },
     });
   });
