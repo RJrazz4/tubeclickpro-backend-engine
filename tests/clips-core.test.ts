@@ -96,6 +96,7 @@ describe('media-args (shell-free arg arrays)', () => {
     const args = ytdlpSectionArgs('bbbbbbbbbbb', 10, 30, '/tmp/x/src.%(ext)s');
     const i = args.indexOf('--download-sections');
     expect(args[i + 1]).toBe('*10-40');
+    expect(args).toContain('--force-keyframes-at-cuts');
     expect(args[args.length - 1]).toBe('https://www.youtube.com/watch?v=bbbbbbbbbbb');
   });
 

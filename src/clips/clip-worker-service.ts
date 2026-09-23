@@ -63,13 +63,19 @@ export class ClipWorkerService {
 
     const workDir = await mkdtemp(join(tmpdir(), 'clip-'));
     try {
-      // 1 — full transcript captions (word timing when JSON3 is available)
+      // 1 — full transcript captions (word timing when JSON3 is available).
+      // Best-effort: a 429 on a stray translated variant or a missing track must
+      // not fail the render — proceed with whatever caption file was written.
       report(8, 'captions');
-      await this.runner(
-        this.config.CLIPS_YTDLP_BIN,
-        ytdlpCaptionArgs(job.videoId, join(workDir, 'cap.%(ext)s')),
-        { timeoutMs: this.config.CLIPS_YTDLP_TIMEOUT_MS, cwd: workDir },
-      );
+      try {
+        await this.runner(
+          this.config.CLIPS_YTDLP_BIN,
+          ytdlpCaptionArgs(job.videoId, join(workDir, 'cap.%(ext)s')),
+          { timeoutMs: this.config.CLIPS_YTDLP_TIMEOUT_MS, cwd: workDir },
+        );
+      } catch (err) {
+        logger.warn({ jobId: job.jobId, error: (err as Error).message }, 'caption fetch incomplete; continuing');
+      }
       const capPath = await findByExt(workDir, ['.json3', '.vtt']);
       let fullCues: CaptionCue[] = [];
       if (capPath) {
