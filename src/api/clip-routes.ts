@@ -51,7 +51,12 @@ export async function registerClipRoutes(
       getConfig().CLIPS_MAX_DURATION_SECONDS,
     );
 
-    const quota = await checkClipQuota(dependencies.redis, user.id, user.tier);
+    const config = getConfig();
+    // V2 test mode deliberately bypasses the quota entirely: do not even
+    // increment Redis. Restore the guard by setting CLIPS_RATE_LIMIT_ENABLED=true.
+    const quota = config.CLIPS_RATE_LIMIT_ENABLED
+      ? await checkClipQuota(dependencies.redis, user.id, user.tier)
+      : { allowed: true, used: 0, limit: Number.MAX_SAFE_INTEGER };
     if (!quota.allowed) {
       throw new AppError(
         `Daily ${user.tier} clip limit reached (${quota.limit}/day)`,

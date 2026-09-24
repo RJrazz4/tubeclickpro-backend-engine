@@ -122,6 +122,10 @@ const schema = z
     CLIPS_HEARTBEAT_TIMEOUT_MS: z.coerce.number().int().min(60000).max(900000).default(120000),
     CLIPS_QUEUE_RATE_MAX: z.coerce.number().int().min(1).default(6),
     CLIPS_QUEUE_RATE_DURATION_MS: z.coerce.number().int().min(1000).default(60_000),
+    // Temporary V2 testing switch: false means no daily clip quota is
+    // consulted or incremented. Set CLIPS_RATE_LIMIT_ENABLED=true to restore
+    // the configured free/premium daily limits after validation.
+    CLIPS_RATE_LIMIT_ENABLED: booleanFromEnv,
     CLIPS_FREE_PER_DAY: z.coerce.number().int().min(1).default(3),
     CLIPS_PREMIUM_PER_DAY: z.coerce.number().int().min(1).default(30),
     CLIPS_YTDLP_TIMEOUT_MS: z.coerce.number().int().min(5000).max(300_000).default(120_000),
