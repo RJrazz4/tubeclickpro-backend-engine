@@ -64,3 +64,12 @@ export function clipIdempotencyKey(
   const raw = `${userId}|${videoId}|${autoSelect ? 'auto' : startSeconds}|${durationSeconds}|${captionStyle}`;
   return `clip:${createHash('sha256').update(raw).digest('hex').slice(0, 40)}`;
 }
+
+/**
+ * BullMQ rejects a custom jobId containing ':' (it is the internal key
+ * separator). Our idempotency key is namespaced 'clip:<hash>', so map it to a
+ * queue-safe id. The state store and client keep the original key.
+ */
+export function toQueueJobId(jobId: string): string {
+  return jobId.replace(/:/g, '_');
+}

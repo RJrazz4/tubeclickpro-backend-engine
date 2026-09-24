@@ -4,6 +4,7 @@ import {
   clampWindow,
   clipIdempotencyKey,
   resolveVideoId,
+  toQueueJobId,
 } from '../src/clips/clip-input.js';
 import { assTime, buildAss } from '../src/clips/ass-builder.js';
 import {
@@ -152,5 +153,23 @@ describe('vtt parser', () => {
     const cues = parseVtt(sample, 2);
     expect(cues[0]).toMatchObject({ start: 0, end: 0 });
     expect(cues[1]).toMatchObject({ start: 2, end: 4.5 });
+  });
+});
+
+describe('queue job id safety (BullMQ forbids ":" in a custom jobId)', () => {
+  it('sanitizes the namespaced idempotency key so enqueueClip cannot crash BullMQ', () => {
+    const key = clipIdempotencyKey('u1', 'aaaaaaaaaaa', 0, 30, 'karaoke', false);
+    expect(key.startsWith('clip:')).toBe(true); // logical key keeps its namespace
+    const qid = toQueueJobId(key);
+    expect(qid).not.toContain(':'); // BullMQ-safe
+    expect(qid.startsWith('clip_')).toBe(true);
+  });
+
+  it('stays deterministic and change-sensitive after sanitizing', () => {
+    const a = toQueueJobId(clipIdempotencyKey('u1', 'aaaaaaaaaaa', 0, 30, 'karaoke', false));
+    const b = toQueueJobId(clipIdempotencyKey('u1', 'aaaaaaaaaaa', 0, 30, 'karaoke', false));
+    const c = toQueueJobId(clipIdempotencyKey('u1', 'aaaaaaaaaaa', 5, 30, 'karaoke', false));
+    expect(a).toBe(b);
+    expect(a).not.toBe(c);
   });
 });

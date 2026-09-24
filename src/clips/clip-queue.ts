@@ -9,7 +9,7 @@ import { ClipStateStore } from './clip-state.js';
 import { SupabaseClipStore } from './clip-store.js';
 import { ClipWorkerService } from './clip-worker-service.js';
 import { MomentSelector } from './moment-selector.js';
-import { clipIdempotencyKey, type CaptionStyle } from './clip-input.js';
+import { clipIdempotencyKey, toQueueJobId, type CaptionStyle } from './clip-input.js';
 
 /**
  * clip-render queue. The web tier only enqueues (fast, non-blocking); a separate
@@ -70,12 +70,16 @@ export async function enqueueClip(
 ): Promise<{ jobId: string; deduped: boolean }> {
   const jobId = clipIdempotencyKey(job.userId, job.videoId, job.startSeconds, job.durationSeconds, job.captionStyle, job.autoSelect);
   const full: ClipJob = { ...job, jobId };
+  // BullMQ forbids ':' in a custom jobId, but our idempotency key is namespaced
+  // 'clip:<hash>'. Derive a queue-safe id for BullMQ; the state store and the
+  // client keep the original jobId (it is opaque to them and valid in URLs/Redis).
+  const queueJobId = toQueueJobId(jobId);
   const queue = createClipQueue(redis);
   try {
-    const existing = await queue.getJob(jobId);
+    const existing = await queue.getJob(queueJobId);
     if (existing) return { jobId, deduped: true };
     await new ClipStateStore(redis).init(jobId, job.userId);
-    await queue.add('job', full, { jobId });
+    await queue.add('job', full, { jobId: queueJobId });
     return { jobId, deduped: false };
   } finally {
     await queue.close();

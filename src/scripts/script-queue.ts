@@ -60,7 +60,9 @@ export async function enqueueGeneration(
   const queue = createScriptQueue(redis);
   try {
     const seq = new Date().toISOString().slice(0, 10);
-    const added = await queue.add('job', job, { jobId: `gen:${job.userId}:${seq}:${Date.now()}` });
+    // BullMQ forbids ':' in a custom jobId — use '_' as the separator.
+    const jobId = `gen_${job.userId}_${seq}_${Date.now()}`;
+    const added = await queue.add('job', job, { jobId });
     return { jobId: String(added.id) };
   } finally {
     await queue.close();
