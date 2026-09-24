@@ -116,6 +116,10 @@ const schema = z
     CLIPS_STORAGE_BUCKET: z.string().default('clips'),
     CLIPS_MAX_DURATION_SECONDS: z.coerce.number().int().min(5).max(180).default(30),
     CLIPS_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(1),
+    // Redis-backed liveness for long ffmpeg/OpenCV stages. The API marks a
+    // processing job failed only after this timeout without a heartbeat.
+    CLIPS_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5000).max(120000).default(15000),
+    CLIPS_HEARTBEAT_TIMEOUT_MS: z.coerce.number().int().min(60000).max(900000).default(120000),
     CLIPS_QUEUE_RATE_MAX: z.coerce.number().int().min(1).default(6),
     CLIPS_QUEUE_RATE_DURATION_MS: z.coerce.number().int().min(1000).default(60_000),
     CLIPS_FREE_PER_DAY: z.coerce.number().int().min(1).default(3),

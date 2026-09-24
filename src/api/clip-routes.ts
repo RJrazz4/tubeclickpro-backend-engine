@@ -86,6 +86,24 @@ export async function registerClipRoutes(
     const clip = await state.get(request.params.id);
     if (!clip) throw new AppError('Not found', 404, 'NOT_FOUND');
     if (clip.userId !== user.id) throw new ForbiddenError('Not your clip');
+
+    // A SIGKILL/OOM leaves Redis state untouched: no JavaScript finally block
+    // and no BullMQ `failed` event can run in the dead process. Heartbeats make
+    // that detectable without a separate paid monitor. Long ffmpeg/OpenCV work
+    // keeps updatedAt fresh; only a silent worker is converted to a terminal
+    // failure here, on the next normal polling request.
+    if (clip.status === 'processing') {
+      const staleMs = getConfig().CLIPS_HEARTBEAT_TIMEOUT_MS;
+      const ageMs = Date.now() - Date.parse(clip.updatedAt);
+      if (Number.isFinite(ageMs) && ageMs > staleMs) {
+        const failed = await state.patch(request.params.id, {
+          status: 'failed',
+          stage: 'failed',
+          error: 'The clip worker stopped reporting while rendering. It may have run out of memory; please try again.',
+        });
+        return failed ?? clip;
+      }
+    }
     return clip;
   });
 }

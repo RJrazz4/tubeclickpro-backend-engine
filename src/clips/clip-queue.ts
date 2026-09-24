@@ -109,8 +109,18 @@ export function createClipWorker(redis: Redis): Worker<ClipJob> {
       limiter: { max: config.CLIPS_QUEUE_RATE_MAX, duration: config.CLIPS_QUEUE_RATE_DURATION_MS },
     },
   );
+  const state = new ClipStateStore(redis);
   worker.on('failed', (job, err) => {
-    logger.error({ jobId: job?.id, error: err.message }, 'clip render job failed');
+    const jobId = job?.data.jobId;
+    logger.error({ jobId: job?.id, stateJobId: jobId, error: err.message }, 'clip render job failed');
+    // Service.render normally records this itself. This second guard covers
+    // queue-level failures and BullMQ attempts exhausted outside the render
+    // try/catch, so ordinary failures never leave a spinner behind.
+    if (jobId) {
+      void state.patch(jobId, { status: 'failed', stage: 'failed', error: err.message.slice(0, 300) }).catch((patchErr: unknown) => {
+        logger.error({ jobId, error: patchErr instanceof Error ? patchErr.message : String(patchErr) }, 'could not persist clip failure state');
+      });
+    }
   });
   return worker;
 }

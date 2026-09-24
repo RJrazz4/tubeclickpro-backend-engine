@@ -59,10 +59,22 @@ export class ClipWorkerService {
     job: ClipJob,
     onProgress?: (percent: number, stage: string) => void,
   ): Promise<{ url: string; selection: { startSeconds: number; durationSeconds: number; reason: string; peakType: string } }> {
+    let currentStage = 'starting';
     const report = (progress: number, stage: string): void => {
+      currentStage = stage;
       onProgress?.(progress, stage);
       void this.state.patch(job.jobId, { status: 'processing', progress, stage });
     };
+
+    // A child process can spend minutes inside ffmpeg/OpenCV without returning
+    // to JavaScript. Refresh updatedAt independently so the API can distinguish
+    // a healthy long render from a worker that was OOM-killed.
+    const heartbeat = setInterval(() => {
+      void this.state.patch(job.jobId, { status: 'processing', stage: currentStage }).catch((err: unknown) => {
+        logger.warn({ jobId: job.jobId, error: err instanceof Error ? err.message : String(err) }, 'clip heartbeat failed');
+      });
+    }, this.config.CLIPS_HEARTBEAT_INTERVAL_MS);
+    heartbeat.unref?.();
 
     const workDir = await mkdtemp(join(tmpdir(), 'clip-'));
     try {
@@ -164,6 +176,7 @@ export class ClipWorkerService {
       await this.state.patch(job.jobId, { status: 'failed', stage: 'failed', error: message.slice(0, 300) });
       throw err;
     } finally {
+      clearInterval(heartbeat);
       await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
