@@ -12,8 +12,11 @@ ENV NODE_ENV=production \
     PATH=/opt/venv/bin:$PATH
 WORKDIR /app
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-venv git ca-certificates ffmpeg \
+    && apt-get install -y --no-install-recommends python3 python3-venv git ca-certificates curl ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp \
+    && yt-dlp --version \
     && python3 -m venv /opt/venv
 COPY workers/python/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt

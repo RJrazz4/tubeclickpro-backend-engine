@@ -22,7 +22,7 @@ import {
   youtubeSyncModuleEnabled,
 } from './youtube/sync-queue.js';
 import { createScriptWorker, scriptModuleEnabled } from './scripts/script-queue.js';
-import { createClipWorker, clipModuleEnabled } from './clips/clip-queue.js';
+import { createClipWorker } from './clips/clip-queue.js';
 
 const config = getConfig();
 const redis = createRedisConnection();
@@ -49,12 +49,17 @@ if (scriptModuleEnabled()) {
   logger.info({ queue: 'script-synthesis' }, 'script synthesis worker started');
 }
 
-// Zero-Cost Viral Shorts Clipper worker — started only when CLIPS_ENABLED.
-if (clipModuleEnabled()) {
-  const clipWorker = createClipWorker(redis);
-  workers.push(clipWorker as unknown as Worker<ViralDnaJobPayload>);
-  logger.info({ queue: 'clip-render', concurrency: config.CLIPS_WORKER_CONCURRENCY }, 'clip render worker started');
-}
+// Clip renders share the existing always-on worker process. Previously this
+// consumer was gated behind CLIPS_ENABLED and expected a separately provisioned
+// Render Background Worker. That service is not part of the API deployment (and
+// free Render plans do not reliably provide background workers), so the API could
+// enqueue clip jobs forever with no consumer. The existing worker image already
+// has the long-running BullMQ lifecycle; attach clip-render here as a fallback.
+// BullMQ locks ensure a separately provisioned dedicated clip worker can coexist
+// without double-processing a job.
+const clipWorker = createClipWorker(redis);
+workers.push(clipWorker as unknown as Worker<ViralDnaJobPayload>);
+logger.info({ queue: 'clip-render', concurrency: config.CLIPS_WORKER_CONCURRENCY }, 'clip render worker started in shared worker process');
 
 // YouTube Signal Link worker (Module O/S) — started only when configured.
 if (youtubeSyncModuleEnabled()) {
