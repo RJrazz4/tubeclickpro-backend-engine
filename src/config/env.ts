@@ -132,6 +132,17 @@ const schema = z
     CLIPS_FACE_TRACK_TIMEOUT_MS: z.coerce.number().int().min(5000).max(300_000).default(90_000),
     CLIPS_FACE_MODEL_PATH: z.string().default('workers/python/models/face_detection_yunet_2023mar.onnx'),
     FFPROBE_BIN: z.string().default('ffprobe'),
+    // ── Pipeline v2 (multi-agent deterministic: preprocess → transcript →
+    //    parallel text agents → edit plan → fast cut engine). Behind a flag so
+    //    the proven single-pass path remains the automatic fallback. ──
+    CLIPS_PIPELINE_V2: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
+    CLIPS_SCENE_THRESHOLD: z.coerce.number().min(0.05).max(1).default(0.3),
+    CLIPS_SILENCE_DB: z.coerce.number().max(0).default(-35),
+    CLIPS_SILENCE_MIN_MS: z.coerce.number().int().min(100).max(5000).default(400),
+    // Optional local STT fallback when a video has no caption track. Empty =
+    // disabled (JSON3/auto-captions are the primary, zero-CPU source).
+    CLIPS_WHISPER_BIN: z.string().default(''),
+    CLIPS_WHISPER_MODEL: z.string().default('base.en'),
   })
   .superRefine((value, context) => {
     if (value.NODE_ENV === 'production' && value.AUTH_MODE === 'development') {

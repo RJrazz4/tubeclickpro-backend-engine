@@ -11,6 +11,8 @@ import { ffmpegVerticalBurnArgs, probeVideo, ytdlpCaptionArgs, ytdlpSectionArgs 
 import { buildFaceTrackExpression, type FaceCenter } from './face-track.js';
 import { execFileRunner, type CommandRunner } from './media-runner.js';
 import { MomentSelector } from './moment-selector.js';
+import { renderClipV2 } from './pipeline/render-v2.js';
+import { createOpenRouterRouter } from '../llm/create-router.js';
 import type { ClipStore } from './clip-store.js';
 import type { ClipJob } from './clip-queue.js';
 
@@ -64,6 +66,23 @@ export class ClipWorkerService {
 
     const workDir = await mkdtemp(join(tmpdir(), 'clip-'));
     try {
+      // Pipeline v2 (multi-agent deterministic) when enabled; the proven
+      // single-pass path below remains the automatic fallback otherwise.
+      if (this.config.CLIPS_PIPELINE_V2) {
+        const v2 = await renderClipV2({
+          job,
+          workDir,
+          runner: this.runner,
+          config: this.config,
+          store: this.deps.store,
+          router: createOpenRouterRouter(),
+          report,
+          detectFaceCrop: (media, dur) => this.detectFaceCrop(media, dur, job.jobId),
+        });
+        await this.state.patch(job.jobId, { status: 'completed', progress: 100, stage: 'completed', url: v2.url, selection: v2.selection });
+        return v2;
+      }
+
       // 1 — full transcript captions (word timing when JSON3 is available).
       // Best-effort: a 429 on a stray translated variant or a missing track must
       // not fail the render — proceed with whatever caption file was written.

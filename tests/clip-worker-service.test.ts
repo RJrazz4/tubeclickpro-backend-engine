@@ -12,7 +12,7 @@ process.env.NODE_ENV = 'test';
 import { stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { resetConfigForTests } from '../src/config/env.js';
+import { getConfig, resetConfigForTests } from '../src/config/env.js';
 import type { ClipJob } from '../src/clips/clip-queue.js';
 import type { CommandRunner } from '../src/clips/media-runner.js';
 
@@ -148,7 +148,9 @@ describe('ClipWorkerService.render', () => {
       select: async () => ({ startSeconds: 2, durationSeconds: 30, reason: 'stub peak', peakType: 'spike' }),
     } as unknown as import('../src/clips/moment-selector.js').MomentSelector;
 
-    const service = new ClipWorkerService({ redis, store, runner, selector });
+    // Pin to the v1 single-pass path: this asserts MomentSelector window
+    // selection, which pipeline v2 replaces with the parallel text agents.
+    const service = new ClipWorkerService({ redis, store, runner, selector, config: { ...getConfig(), CLIPS_PIPELINE_V2: false } });
     const result = await service.render(autoJob);
 
     expect(sectionArg).toBe('*2-32');
