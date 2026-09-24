@@ -101,7 +101,13 @@ export function createClipWorker(redis: Redis): Worker<ClipJob> {
 
   const worker = new Worker<ClipJob>(
     CLIP_QUEUE_NAME,
-    async (job: Job<ClipJob>) => service.render(job.data, (p) => void job.updateProgress(p)),
+    async (job: Job<ClipJob>) => {
+      const maxAttempts = job.opts.attempts ?? 1;
+      const finalAttempt = job.attemptsMade + 1 >= maxAttempts;
+      return service.render(job.data, (p) => {
+        void job.updateProgress(p);
+      }, finalAttempt);
+    },
     {
       connection: createRedisConnection(),
       prefix: `${config.REDIS_KEY_PREFIX}:${CLIP_QUEUE_NAME}`,
@@ -116,7 +122,8 @@ export function createClipWorker(redis: Redis): Worker<ClipJob> {
     // Service.render normally records this itself. This second guard covers
     // queue-level failures and BullMQ attempts exhausted outside the render
     // try/catch, so ordinary failures never leave a spinner behind.
-    if (jobId) {
+    const finalAttempt = !job || job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+    if (jobId && finalAttempt) {
       void state.patch(jobId, { status: 'failed', stage: 'failed', error: err.message.slice(0, 300) }).catch((patchErr: unknown) => {
         logger.error({ jobId, error: patchErr instanceof Error ? patchErr.message : String(patchErr) }, 'could not persist clip failure state');
       });

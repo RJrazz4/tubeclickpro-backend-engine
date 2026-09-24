@@ -58,6 +58,7 @@ export class ClipWorkerService {
   async render(
     job: ClipJob,
     onProgress?: (percent: number, stage: string) => void,
+    persistFailure = true,
   ): Promise<{ url: string; selection: { startSeconds: number; durationSeconds: number; reason: string; peakType: string } }> {
     let currentStage = 'starting';
     const report = (progress: number, stage: string): void => {
@@ -173,7 +174,9 @@ export class ClipWorkerService {
       return { url, selection };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await this.state.patch(job.jobId, { status: 'failed', stage: 'failed', error: message.slice(0, 300) });
+      if (persistFailure) {
+        await this.state.patch(job.jobId, { status: 'failed', stage: 'failed', error: message.slice(0, 300) });
+      }
       throw err;
     } finally {
       clearInterval(heartbeat);
